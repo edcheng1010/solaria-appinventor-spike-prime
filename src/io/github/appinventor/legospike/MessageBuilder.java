@@ -9,34 +9,22 @@ import java.nio.charset.StandardCharsets;
  * must pass the result through {@link MessageFramer#pack(byte[])} before
  * writing to the RX characteristic.
  *
- * Message IDs used here follow the task specification. Two deviations from
- * the official LEGO spike-prime-docs are noted inline:
- *   • StartFileUploadRequest uses 0x0E here vs 0x0C in the official Python SDK.
- *   • ExecuteProgramRequest uses 0x12 here vs ProgramFlowRequest (0x1E) in
- *     the official Python SDK.
- * If hub communication fails for these two messages, change the IDs to 0x0C
- * and 0x1E respectively and align field layouts with messages.py.
+ * All message IDs and field layouts match the official LEGO spike-prime-docs
+ * Python SDK (messages.py).
  *
  * TunnelMessage field layout: [0x32] [size_low:uint8] [size_high:uint8] [payload].
- * The two bytes after the ID are a uint16 little-endian payload length, NOT a
- * port ID — the task description's "portId=0x0A" is the payload-size byte that
- * happens to equal 10 for the 10-character "A+050B+050" test string.
+ * The two bytes after the ID are a uint16 little-endian payload length.
  */
 public class MessageBuilder {
 
     // -----------------------------------------------------------------------
-    // Message IDs (App → Hub)
+    // Message IDs (App → Hub)  — all match messages.py
     // -----------------------------------------------------------------------
-    public static final int MSG_INFO_REQUEST        = 0x00;
-    /** NOTE: official SDK uses 0x0C; see class javadoc */
-    public static final int MSG_START_FILE_UPLOAD   = 0x0E;
-    public static final int MSG_TRANSFER_CHUNK      = 0x10;
-    /** NOTE: official SDK uses ProgramFlowRequest (0x1E); see class javadoc */
-    public static final int MSG_EXECUTE_PROGRAM     = 0x12;
-    public static final int MSG_TUNNEL              = 0x32;
-
-    // File type byte for Python scripts
-    private static final byte FILE_TYPE_PYTHON = 0x04;
+    public static final int MSG_INFO_REQUEST      = 0x00;
+    public static final int MSG_START_FILE_UPLOAD = 0x0C;
+    public static final int MSG_TRANSFER_CHUNK    = 0x10;
+    public static final int MSG_PROGRAM_FLOW      = 0x1E;
+    public static final int MSG_TUNNEL            = 0x32;
 
     // -----------------------------------------------------------------------
     // Builders
@@ -44,6 +32,7 @@ public class MessageBuilder {
 
     /**
      * InfoRequest — always the first message sent after connecting.
+     *
      * Structure: [0x00]
      */
     public static byte[] buildInfoRequest() {
@@ -53,13 +42,11 @@ public class MessageBuilder {
     /**
      * StartFileUploadRequest — begins a Python program upload to a hub slot.
      *
-     * Structure:
-     *   [0x0E]
+     * Structure (matches messages.py StartFileUploadRequest.serialize):
+     *   [0x0C]
      *   [fileName : null-terminated UTF-8]
      *   [slotId   : uint8]
-     *   [fileSize : uint32 little-endian]
      *   [fileCRC  : uint32 little-endian, CRC32 of fileContent]
-     *   [fileType : uint8 = 0x04 (Python)]
      *
      * @param fileName    name stored on the hub (e.g. "program.py")
      * @param slotId      program slot (0–19)
@@ -69,12 +56,11 @@ public class MessageBuilder {
             String fileName, int slotId, byte[] fileContent) {
 
         byte[] nameBytes = toNullTerminated(fileName);
-        long   fileSize  = fileContent.length;
         long   fileCRC   = SpikeCRC32.calculate(fileContent);
         byte[] crcLE     = SpikeCRC32.toByteArrayLE(fileCRC);
 
-        //  1 (ID) + nameBytes.length + 1 (slot) + 4 (size) + 4 (crc) + 1 (type)
-        byte[] msg = new byte[1 + nameBytes.length + 1 + 4 + 4 + 1];
+        // 1 (ID) + nameBytes.length + 1 (slot) + 4 (crc)
+        byte[] msg = new byte[1 + nameBytes.length + 1 + 4];
         int pos = 0;
 
         msg[pos++] = (byte) MSG_START_FILE_UPLOAD;
@@ -84,15 +70,7 @@ public class MessageBuilder {
 
         msg[pos++] = (byte)(slotId & 0xFF);
 
-        msg[pos++] = (byte)( fileSize        & 0xFF);
-        msg[pos++] = (byte)((fileSize >>  8) & 0xFF);
-        msg[pos++] = (byte)((fileSize >> 16) & 0xFF);
-        msg[pos++] = (byte)((fileSize >> 24) & 0xFF);
-
         System.arraycopy(crcLE, 0, msg, pos, 4);
-        pos += 4;
-
-        msg[pos] = FILE_TYPE_PYTHON;
 
         return msg;
     }
@@ -100,18 +78,20 @@ public class MessageBuilder {
     /**
      * TransferChunkRequest — sends one chunk of program data.
      *
-     * Structure:
+     * Structure (matches messages.py TransferChunkRequest.serialize):
      *   [0x10]
      *   [runningCRC : uint32 little-endian]
+     *   [chunkSize  : uint16 little-endian]
      *   [chunk      : raw bytes]
      *
      * @param chunk      the chunk bytes to transfer
-     * @param runningCRC the accumulated CRC after encoding this chunk
-     *                   (seed=0 for the first chunk; previous result for later ones)
+     * @param runningCRC the accumulated CRC after this chunk
+     *                   (seed=0 for first chunk; previous result for later ones)
      */
     public static byte[] buildTransferChunkRequest(byte[] chunk, long runningCRC) {
-        byte[] crcLE = SpikeCRC32.toByteArrayLE(runningCRC);
-        byte[] msg   = new byte[1 + 4 + chunk.length];
+        byte[] crcLE  = SpikeCRC32.toByteArrayLE(runningCRC);
+        int    size   = chunk.length;
+        byte[] msg    = new byte[1 + 4 + 2 + size];
         int pos = 0;
 
         msg[pos++] = (byte) MSG_TRANSFER_CHUNK;
@@ -119,22 +99,31 @@ public class MessageBuilder {
         System.arraycopy(crcLE, 0, msg, pos, 4);
         pos += 4;
 
-        System.arraycopy(chunk, 0, msg, pos, chunk.length);
+        msg[pos++] = (byte)( size       & 0xFF);   // chunkSize low
+        msg[pos++] = (byte)((size >> 8) & 0xFF);   // chunkSize high
+
+        System.arraycopy(chunk, 0, msg, pos, size);
 
         return msg;
     }
 
     /**
-     * ExecuteProgramRequest — starts the program in the given slot.
+     * ProgramFlowRequest — start or stop the program in the given slot.
      *
-     * Structure:
-     *   [0x12]
+     * Structure (matches messages.py ProgramFlowRequest.serialize):
+     *   [0x1E]
+     *   [stop   : uint8]   0x00 = start, 0x01 = stop
      *   [slotId : uint8]
      *
+     * @param stop   true to stop the program, false to start it
      * @param slotId program slot (0–19)
      */
-    public static byte[] buildExecuteProgramRequest(int slotId) {
-        return new byte[]{(byte) MSG_EXECUTE_PROGRAM, (byte)(slotId & 0xFF)};
+    public static byte[] buildProgramFlowRequest(boolean stop, int slotId) {
+        return new byte[]{
+            (byte) MSG_PROGRAM_FLOW,
+            stop ? (byte) 0x01 : (byte) 0x00,
+            (byte)(slotId & 0xFF)
+        };
     }
 
     /**
@@ -173,7 +162,6 @@ public class MessageBuilder {
         byte[] src    = s.getBytes(StandardCharsets.UTF_8);
         byte[] result = new byte[src.length + 1];
         System.arraycopy(src, 0, result, 0, src.length);
-        // result[src.length] is already 0
         return result;
     }
 }
