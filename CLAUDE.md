@@ -7,13 +7,13 @@ This is an MIT App Inventor extension for LEGO SPIKE Prime hubs, developed for t
 
 1. **NEVER overwrite the SPIKE Prime UUIDs.**
    - Service: `0000fd02-0000-1000-8000-00805f9b34fb`
-   - RX: `0000fd02-0001-1000-8000-00805f9b34fb`
-   - TX: `0000fd02-0002-1000-8000-00805f9b34fb`
-   - *Note: These are specific to SPIKE Prime. Do not use the general LEGO Wireless Protocol UUIDs (`00001623...`).*
+   - RX (write to hub): `0000fd02-0001-1000-8000-00805f9b34fb`
+   - TX (read from hub): `0000fd02-0002-1000-8000-00805f9b34fb`
+   - *Note: These are specific to SPIKE Prime 3.x. Do not use the general LEGO Wireless Protocol UUIDs (`00001623...`). Those are for SPIKE Essential, Boost, and Technic.*
 
 2. **NEVER remove the RSSI Staleness Logic.**
    - Device detection relies on RSSI staleness, NOT timeouts or blacklists.
-   - If a device's RSSI doesn't change for 3 consecutive scans, it is considered a "ghost" device (turned off but cached by Android) and must be hidden.
+   - If a device's RSSI does not change for 3 consecutive scans, it is considered a "ghost" device (turned off but cached by Android) and must be hidden.
    - This logic is in `LegoSpikePrime.java` -> `LegoHub.update()`.
 
 3. **ALWAYS check for nulls in asynchronous BLE events.**
@@ -24,6 +24,20 @@ This is an MIT App Inventor extension for LEGO SPIKE Prime hubs, developed for t
 4. **ALWAYS manage scanning state before connecting.**
    - You must stop scanning before initiating a connection to a hub.
    - Use the `wasScanningBeforeConnection` flag to resume scanning if the connection fails or drops.
+
+5. **NEVER send direct motor/LED commands via BLE to SPIKE Prime 3.x.**
+   - SPIKE Prime 3.x does NOT support direct hardware control via BLE commands.
+   - You MUST use the TunnelMessage approach: upload a Python controller program to the hub first, then send commands via TunnelMessage (0x32).
+   - See ARCHITECTURE.md Section 4 for the complete protocol specification.
+
+6. **ALWAYS use correct COBS encoding constants.**
+   - DELIMITER = 0x02
+   - NO_DELIMITER = 255
+   - MAX_BLOCK_SIZE = 84
+   - COBS_CODE_OFFSET = 2
+   - XOR = 0x03
+   - Pack: data -> COBS encode -> XOR each byte with 0x03 -> append delimiter 0x02
+   - Unpack: strip delimiter -> XOR each byte with 0x03 -> COBS decode
 
 ## Codebase Structure (The "Split")
 
@@ -37,6 +51,35 @@ There are two packages in this repository:
    - Contains 13 helper classes (`SpikeProtocol.java`, `COBSEncoder.java`, etc.).
    - These are currently **NOT INTEGRATED** into the main extension.
    - They represent a more robust protocol implementation for future extensibility to other LEGO hubs.
+   - COBSEncoder.java constants MUST be verified against the values in Rule 6 above before integration.
+
+## SPIKE Prime 3.x Communication Protocol
+
+### Connection Flow
+1. Scan for BLE devices advertising service UUID `0000fd02-...`
+2. Connect to GATT server
+3. Get primary service (`0000fd02-0000-...`)
+4. Get RX characteristic (`0000fd02-0001-...`) for writing to hub
+5. Get TX characteristic (`0000fd02-0002-...`) for reading from hub
+6. Enable notifications on TX characteristic
+
+### Program Upload Flow (Required Before Motor/LED Control)
+1. Clear slot: Send `0x46 0x00` via RX (COBS encoded)
+2. Start file upload: Send `0x0C` + "program.py\0" + slot(0x00) + CRC32 via RX (COBS encoded)
+3. Transfer chunks: Send `0x10` + running_CRC32 + chunk_size + chunk_data via RX (COBS encoded)
+4. Start program: Send `0x1E 0x00 0x00` via RX (COBS encoded)
+
+### Real-Time Control Flow
+1. Send TunnelMessage: `0x32` + payload_size(uint16 LE) + command_data via RX (COBS encoded)
+2. Receive response: Hub-side program sends back via TX (COBS encoded)
+3. Wait for "rdy" acknowledgment before sending next command
+
+### Hub-Side Python Program (Must Be Embedded in Extension)
+The extension must contain a Python program string that gets uploaded to the hub. This program:
+- Imports `hub.config['module_tunnel']` for bidirectional communication
+- Registers a callback via `tunnel.callback(handler_function)`
+- Parses incoming command bytes and controls motors/LEDs/sensors
+- Sends acknowledgments and sensor data back via `tunnel.send()`
 
 ## Development Workflow
 
@@ -44,7 +87,35 @@ There are two packages in this repository:
 2. **Compile frequently** using the provided Ant build script (`build.xml` or `compile_windows.bat`).
 3. **Test on physical devices.** The App Inventor emulator cannot test BLE extensions reliably.
 4. **Commit small, logical changes.** Use Git branching for experimental features.
+5. **Never modify files without explicit approval from Edward (project owner).**
 
-## Known Issues / Next Steps
-- The immediate next step is to implement UUID-based device authentication *after* connecting, to ensure the connected device is actually a SPIKE Prime hub before sending commands.
-- Long-term goal: Integrate the 13 helper classes from the `legospike` package into the main `legospikeprime` extension to support full COBS encoding and CRC32 verification.
+## Known Issues / Next Steps (Priority Order)
+
+### Phase 1: Protocol Correction (CRITICAL)
+1. Verify COBSEncoder.java constants match the verified values in Rule 6
+2. Implement file upload protocol (ClearSlot -> StartFileUpload -> TransferChunk)
+3. Implement program start (ProgramFlowRequest 0x1E)
+4. Implement TunnelMessage send (0x32) and receive
+5. Create and embed hub-side Python controller program
+
+### Phase 2: Hub-Side Python Program
+1. Design comprehensive command protocol for motor control (all 6 ports)
+2. Add LED matrix control commands
+3. Add sensor reading commands (color, distance, force)
+4. Add hub status commands (battery, orientation)
+
+### Phase 3: Testing and Validation
+1. Test BLE connection with physical SPIKE Prime hub
+2. Test program upload reliability
+3. Test TunnelMessage latency
+4. Test reconnection after disconnect
+
+### Future: Multi-Hub Support
+- Extend to support LEGO Boost, EV3, SPIKE Essential (different protocols)
+- Abstract BluetoothInterfaceImpl into an interface with product-specific implementations
+
+## Reference Implementations
+- LEGO Official Python: https://github.com/LEGO/spike-prime-docs/tree/main/examples/python
+- Working WebBluetooth: https://github.com/etomasfe/SpikeRemoteControl
+- Protocol Docs: https://lego.github.io/spike-prime-docs/
+- LEGO Issue #3 (TunnelMessage): https://github.com/LEGO/spike-prime-docs/issues/3
