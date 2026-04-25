@@ -1,71 +1,111 @@
-# LEGO SPIKE Prime App Inventor Extension - Documentation Index
-## Date: April 25, 2026
-## Prepared for: Edward, MIT Hong Kong Innovation Node
+# Comprehensive Documentation Index
 
-This document serves as a comprehensive index of all official and unofficial documentation, reference implementations, and community discussions related to the LEGO SPIKE Prime BLE protocol and App Inventor integration. It was compiled across 17+ research and development sessions.
+**Date:** April 25, 2026
+**Prepared for:** Edward, MIT Hong Kong Innovation Node
 
----
+This document catalogs ALL official and unofficial LEGO and App Inventor documentation sources collected across all 18 task sessions (including the current one). It serves as the definitive reference guide for the SPIKE Prime App Inventor Extension project.
 
-## 1. Official LEGO Documentation
+## 1. Official LEGO Documentation & Repositories
 
-These are the authoritative sources for the SPIKE Prime protocol and Python API.
+These are the authoritative sources for the SPIKE Prime 3.x BLE protocol and Python API.
 
-| Resource | Description | URL |
-|----------|-------------|-----|
-| **SPIKE Prime Protocol Docs** | Official documentation for the SPIKE Prime BLE protocol, including message formats and connection flow. | [lego.github.io/spike-prime-docs](https://lego.github.io/spike-prime-docs/) |
-| **SPIKE Prime Python Examples** | Official Python reference implementation for connecting to SPIKE Prime via BLE, uploading programs, and sending messages. | [github.com/LEGO/spike-prime-docs/tree/main/examples/python](https://github.com/LEGO/spike-prime-docs/tree/main/examples/python) |
-| **SPIKE Prime Messages** | Detailed breakdown of the binary message types (InfoRequest, TunnelMessage, etc.). | [lego.github.io/spike-prime-docs/messages.html](https://lego.github.io/spike-prime-docs/messages.html) |
-| **LEGO GitHub Issue #3** | Critical confirmation from a LEGO developer (SteffenLEGO) about the required two-part architecture (program upload + TunnelMessage) for motor/LED control. | [github.com/LEGO/spike-prime-docs/issues/3](https://github.com/LEGO/spike-prime-docs/issues/3) |
+- **[SPIKE Prime Protocol Documentation](https://lego.github.io/spike-prime-docs/)**
+  The official specification for the SPIKE Prime 3.x BLE protocol, detailing the COBS encoding, message framing, and UUIDs.
+- **[SPIKE Prime Connection Setup](https://lego.github.io/spike-prime-docs/connect.html)**
+  Official guide on establishing the BLE connection and the required handshake (InfoRequest).
+- **[SPIKE Prime Messages Reference](https://lego.github.io/spike-prime-docs/messages.html)**
+  Detailed breakdown of all binary message types (0x00 to 0x47) used in the protocol.
+- **[LEGO Official Python Examples](https://github.com/LEGO/spike-prime-docs/tree/main/examples/python)**
+  The official reference implementation in Python, demonstrating how to connect, encode/decode COBS, and upload programs.
+- **[LEGO Official messages.py](https://github.com/LEGO/spike-prime-docs/blob/main/examples/python/messages.py)**
+  Specific reference file showing how to serialize and deserialize the binary messages.
+- **[LEGO GitHub Issue #3 (SteffenLEGO)](https://github.com/LEGO/spike-prime-docs/issues/3)**
+  Critical confirmation from a LEGO developer that direct motor control is not supported via BLE commands, and that the TunnelMessage (0x32) approach must be used.
+- **[MINDSTORMS Robot Inventor Hub API (BT_VCP)](https://lego.github.io/MINDSTORMS-Robot-Inventor-hub-API/class_bt_vcp.html)**
+  Documentation for the older Classic Bluetooth SPP approach (used in the Korean FUNERS video), which is NOT compatible with SPIKE Prime 3.x firmware.
+- **[SPIKE Essential Python Help](https://spike.legoeducation.com/essential/help/lls-help-python)**
+  Reference for the older LEGO Wireless Protocol 3.0, which is fundamentally different from the SPIKE Prime protocol.
 
----
+## 2. Official MIT App Inventor Documentation & Repositories
 
-## 2. Unofficial & Community Documentation
+These sources guide the development of the extension itself.
 
-These sources provide additional context, alternative APIs, and community findings.
+- **[App Inventor Extension Development Guide](https://appinventor.mit.edu/explore/ai2/create-extensions.html)**
+  The official starting point for building App Inventor extensions.
+- **[App Inventor Extensions Repository](https://github.com/mit-cml/appinventor-extensions)**
+  The official source code for MIT-maintained extensions.
+- **[App Inventor BluetoothLE Extension Source](https://github.com/mit-cml/appinventor-extensions/tree/extension/bluetoothle)**
+  Critical reference for understanding how App Inventor handles BLE connections, scanning, and characteristics.
+- **[App Inventor Micro:bit Extension Source](https://github.com/mit-cml/appinventor-extensions/tree/extension/microbit)**
+  Reference used for architectural decisions regarding component structure and event handling.
+- **[App Inventor BluetoothLE Reference](https://iot.appinventor.mit.edu/iot/reference/bluetoothle)**
+  Documentation for the blocks and methods available in the standard BLE extension.
 
-| Resource | Description | URL |
-|----------|-------------|-----|
-| **Tufts CEEO SPIKE 3 Python Docs** | Comprehensive documentation of the hub-side Python API for SPIKE 3.x firmware. Confirms the absence of a built-in Bluetooth module. | [tuftsceeo.github.io/SPIKEPythonDocs/SPIKE3.html](https://tuftsceeo.github.io/SPIKEPythonDocs/SPIKE3.html) |
-| **bricklife JSON Commands Gist** | Examples of JSON commands used in older SPIKE 2.x firmware. Useful for historical context but obsolete for 3.x. | [gist.github.com/bricklife/13c7fe07c3145dd94f4f23d20ccf5a79](https://gist.github.com/bricklife/13c7fe07c3145dd94f4f23d20ccf5a79) |
-| **MINDSTORMS Hub API (BT_VCP)** | Documentation for the `bt_vcp` module used in SPIKE 2.x and MINDSTORMS Robot Inventor. Obsolete for SPIKE 3.x. | [lego.github.io/MINDSTORMS-Robot-Inventor-hub-API/class_bt_vcp.html](https://lego.github.io/MINDSTORMS-Robot-Inventor-hub-API/class_bt_vcp.html) |
+## 3. Community & Forum Discussions
 
----
+Insights from the developer community regarding SPIKE Prime and App Inventor.
 
-## 3. Reference Implementations & Competitors
+- **[App Inventor Community: LEGO SPIKE Prime Extension Request](https://community.appinventor.mit.edu/t/lego-spike-prime-extension/146410)**
+  A thread with 1,500 views demonstrating massive community demand for this exact project, confirming no existing solution exists.
+- **[App Inventor Community: Extension Development Category](https://community.appinventor.mit.edu/t/about-the-extension-development-category/1938)**
+  General guidelines and help for extension developers.
+- **[App Inventor Community: BluetoothLE Updates 2024](https://community.appinventor.mit.edu/t/bluetoothle-updates-2024/134483)**
+  Important context on recent changes to the BLE extension that affect our implementation.
+- **[Facebook SPIKE Community: Connecting to App Inventor](https://www.facebook.com/groups/SPIKEcommunity/posts/2099543697090518/)**
+  Discussion highlighting the Korean FUNERS video and the community's inability to replicate it on modern firmware.
+- **[Reddit FLL: RemoteBrick Announcement](https://www.reddit.com/r/FLL/comments/1p0lvuz/remotebrick_the_first_java_library_for_the/)**
+  Discussion about the RemoteBrick Java library, confirming it uses Classic Bluetooth (SPP) and is Windows-only.
 
-These projects demonstrate various approaches to controlling LEGO hubs, highlighting the evolution of the protocols.
+## 4. Third-Party GitHub Repositories & Open Source Projects
 
-| Project | Description | URL |
-|---------|-------------|-----|
-| **etomasfe/SpikeRemoteControl** | **CRITICAL REFERENCE:** A working HTML+JS (WebBluetooth) implementation that successfully uses the SPIKE 3.x protocol (program upload + TunnelMessage). | [github.com/etomasfe/SpikeRemoteControl](https://github.com/etomasfe/SpikeRemoteControl) |
-| **JuniorJacki/RemoteBrick** | A Java desktop library for controlling the Inventor Hub (51515) using Bluetooth Classic (SPP). Not applicable to our BLE/Android use case. | [github.com/JuniorJacki/RemoteBrick](https://github.com/JuniorJacki/RemoteBrick) |
-| **gpdaniels/spike-prime** | An older Android controller app that uses Classic Bluetooth (SPP) and JSON-RPC. Obsolete for SPIKE 3.x. | [github.com/gpdaniels/spike-prime](https://github.com/gpdaniels/spike-prime) |
-| **Anton's Mindstorms App** | An Android app for MINDSTORMS/SPIKE 2.0 that requires a custom Python library (`mpy_robot_tools`) on the hub. Does not work with SPIKE 3.x. | [antonsmindstorms.com/...](https://www.antonsmindstorms.com/2026/01/09/how-to-remote-control-your-mindstorms-hub-with-an-android-app-in-python/) |
+Working code and experiments from other developers trying to solve the same problem.
 
----
+- **[etomasfe/SpikeRemoteControl](https://github.com/etomasfe/SpikeRemoteControl)**
+  **CRITICAL:** The only known working implementation of the SPIKE Prime 3.x protocol (HTML+JS). Proves the TunnelMessage architecture works.
+- **[gpdaniels/spike-prime](https://github.com/gpdaniels/spike-prime)**
+  Older Android controller implementation. Analysis confirmed it uses Classic Bluetooth SPP, not BLE.
+- **[gpdaniels bluetooth.java](https://github.com/gpdaniels/spike-prime/blob/master/controller/controller-android/source/com/gpdaniels/controller/service/bluetooth.java)**
+  Specific file showing the use of `createInsecureRfcommSocketToServiceRecord`, proving it's not BLE.
+- **[JuniorJacki/RemoteBrick](https://github.com/JuniorJacki/RemoteBrick)**
+  A Java library for controlling the hub. Analysis confirmed it is Windows-only and uses Classic Bluetooth (SPP).
+- **[tuftsceeo/SPIKEPythonDocs](https://github.com/tuftsceeo/SPIKEPythonDocs)**
+  Comprehensive documentation of the hub-side Python API.
+- **[tuftsceeo/SPIKE-Web-Interface](https://github.com/tuftsceeo/SPIKE-Web-Interface)**
+  Web interface experiments from Tufts University.
+- **[GO-Robot-FLL/Python-for-Spike-Prime](https://github.com/GO-Robot-FLL/Python-for-Spike-Prime)**
+  Python scripts and documentation for FLL teams.
+- **[GianCann/SpikePrimeHub](https://github.com/GianCann/SpikePrimeHub)**
+  Another Python-based interaction library.
+- **[faisaltameesh/spikerc](https://github.com/faisaltameesh/spikerc)**
+  Remote control experiments.
+- **[gabrielsessions/pyrepl-js](https://github.com/gabrielsessions/pyrepl-js)**
+  JavaScript REPL interface for MicroPython devices.
+- **[sanjayseshan/spikeprime-tools](https://github.com/sanjayseshan/spikeprime-tools)**
+  Tools for SPIKE Prime development.
+- **[sanjayseshan/spikeprime-vscode](https://github.com/sanjayseshan/spikeprime-vscode)**
+  VS Code extension for SPIKE Prime.
+- **[bricklife/LEGO SPIKE Prime JSON command examples](https://gist.github.com/bricklife/13c7fe07c3145dd94f4f23d20ccf5a79)**
+  Examples of the older 2.x JSON-RPC protocol.
+- **[dctian/lego-spike-prime-py](https://github.com/dctian/lego-spike-prime-py)**
+  Python library for SPIKE Prime.
+- **[pybricks/technical-info assigned-numbers.md](https://github.com/pybricks/technical-info/blob/master/assigned-numbers.md)**
+  Reference for LEGO device IDs and UUIDs.
 
-## 4. Community Discussions & Videos
+## 5. Other Resources, Articles & Videos
 
-| Resource | Description | URL |
-|----------|-------------|-----|
-| **FUNERS App Inventor Video** | A demonstration by a Korean LEGO Education partner using App Inventor to control SPIKE Prime. Uses the obsolete `BT_VCP` approach (SPIKE 2.x). | [youtube.com/watch?v=0QyTuA4AUjg](https://www.youtube.com/watch?v=0QyTuA4AUjg) |
-| **MIT App Inventor Community Thread** | A user asking how to control SPIKE Prime with App Inventor. The consensus was that no direct solution existed at the time. | [community.appinventor.mit.edu/t/lego-spike-prime-extension/146410](https://community.appinventor.mit.edu/t/lego-spike-prime-extension/146410) |
-| **Facebook SPIKE Community Post** | A user struggling to replicate the FUNERS video approach, highlighting the confusion caused by the firmware transition from 2.x to 3.x. | [facebook.com/groups/SPIKEcommunity/posts/2099543697090518/](https://www.facebook.com/groups/SPIKEcommunity/posts/2099543697090518/) |
-
----
-
-## 5. Internal Project Documentation
-
-These documents are maintained within our repository to guide development.
-
-| Document | Description | Location |
-|----------|-------------|----------|
-| **ARCHITECTURE.md** | The single source of truth for the extension's architecture, including the critical protocol correction for SPIKE 3.x. | `/ARCHITECTURE.md` |
-| **CLAUDE.md** | Persistent memory and strict rules for Claude Code development. | `/CLAUDE.md` |
-| **COMPETITIVE_ANALYSIS_REPORT_20260425.md** | A detailed analysis of existing solutions and our competitive advantage. | `/docs/COMPETITIVE_ANALYSIS_REPORT_20260425.md` |
-| **CORRECT_SPIKE_PRIME_UUIDS.md** | Verification of the correct BLE Service and Characteristic UUIDs for SPIKE Prime. | `/docs/CORRECT_SPIKE_PRIME_UUIDS.md` |
-| **CRITICAL_MOTOR_CONTROL_APPROACH.md** | Detailed explanation of the two-part architecture required for motor/LED control on SPIKE 3.x. | `/docs/CRITICAL_MOTOR_CONTROL_APPROACH.md` |
-| **SPIKE_REMOTE_CONTROL_ANALYSIS.md** | Deep dive into the working `etomasfe` implementation. | `/docs/SPIKE_REMOTE_CONTROL_ANALYSIS.md` |
-| **COMPILATION_AND_DEBUGGING.md** | Instructions for compiling the extension and debugging on Android. | `/docs/COMPILATION_AND_DEBUGGING.md` |
-| **CLAUDE_CODE_SETUP_AND_WORKFLOW_GUIDE.md** | Guide for setting up and using Claude Code in the three-party workflow. | `/docs/CLAUDE_CODE_SETUP_AND_WORKFLOW_GUIDE.md` |
-| **VERSION_VERIFICATION_REPORT.md** | Verification that all source files are the latest versions containing all fixes. | `/docs/VERSION_VERIFICATION_REPORT.md` |
+- **[Tufts CEEO SPIKE 3 Python API Reference](https://tuftsceeo.github.io/SPIKEPythonDocs/SPIKE3.html)**
+  **CRITICAL:** Proves that SPIKE 3.x firmware has no `bt_vcp` module, confirming the Korean video approach is obsolete.
+- **[Anton's Mindstorms: Remote Control Android App](https://www.antonsmindstorms.com/2026/01/09/how-to-remote-control-your-mindstorms-hub-with-an-android-app-in-python/)**
+  Analysis showed this requires custom firmware (`mpy_robot_tools`) and only works on SPIKE 2.0.
+- **[YouTube: Korean FUNERS Group App Inventor Demo 1](https://www.youtube.com/watch?v=0QyTuA4AUjg)**
+  Video showing App Inventor controlling SPIKE Prime. Analysis proved it uses the obsolete `BT_VCP` Classic Bluetooth approach on 2.x firmware.
+- **[YouTube: Korean FUNERS Group App Inventor Demo 2](https://www.youtube.com/watch?v=rQm1uk4JV2E)**
+  Second demonstration video from the same group.
+- **[Chrome Developer Blog: LEGO Education SPIKE Web Bluetooth](https://developer.chrome.com/blog/lego-education-spike-web-bluetooth-web-serial)**
+  Article discussing Web Bluetooth integration with SPIKE.
+- **[dwalton76/spikedev](https://dwalton76.github.io/spikedev/index.html)**
+  Documentation for the spikedev Python library.
+- **[PeterStaev/lego-spikeprime-mindstorms-vscode](https://github.com/PeterStaev/lego-spikeprime-mindstorms-vscode)**
+  VS Code extension documentation.
+- **[Android Studio Command Line Tools](https://developer.android.com/studio#command-tools)**
+  Reference used for setting up the compilation environment.
