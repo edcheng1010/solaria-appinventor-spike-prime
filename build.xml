@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Build file for the LegoSpikePrime App Inventor extension.
+
+  PREREQUISITES (all present on this machine — no downloads required):
+    - Apache Ant 1.10.x
+    - App Inventor source tree at C:/appinventor/appinventor-sources
+        contains pre-built AndroidRuntime.jar, d8.jar, android.jar, ExternalComponentGenerator
+    - Android SDK at C:/Android/SDK (android.jar used for compilation)
+
+  USAGE:
+    ant               → sync sources + build + produce build/extensions/*.aix
+    ant test          → compile and run all protocol-layer JUnit tests
+    ant sync-sources  → copy project sources into the AI2 source tree only
+    ant clean         → remove build/ directory (does not touch AI2 tree)
+
+  To override the AI2 source tree location:
+    ant -Dai2.root=D:/my/appinventor/appinventor-sources
+-->
+
+<project name="LegoSpikePrime" default="package" basedir=".">
+
+  <!-- ===================================================================
+       Paths — override on the command line with -Dproperty=value
+       =================================================================== -->
+
+  <!-- Root of the App Inventor source checkout -->
+  <property name="ai2.root"
+            value="C:/appinventor/appinventor-sources"/>
+
+  <!-- AI2 components sub-project (contains the extensions build pipeline) -->
+  <property name="ai2.components.dir"
+            value="${ai2.root}/appinventor/components"/>
+
+  <!-- Directory in the AI2 source tree where our extension source files live.
+       Both the legospike helper package AND the legospikeprime main class are
+       placed here — matching the existing convention in the AI2 tree. -->
+  <property name="ai2.ext.src.dir"
+            value="${ai2.components.dir}/src/io/github/appinventor/legospike"/>
+
+  <!-- Fully-qualified extension type (matches @DesignerComponent annotation) -->
+  <property name="ext.fqcn"  value="io.github.appinventor.legospikeprime"/>
+
+  <!-- Our project source and output layout -->
+  <property name="src.dir"     location="${basedir}/src"/>
+  <property name="output.dir"  location="${basedir}/build/extensions"/>
+
+  <!-- Compiled class dirs for the test target (pure-Java protocol layer) -->
+  <property name="build.main"  location="${basedir}/build/main"/>
+  <property name="build.tests" location="${basedir}/build/test-classes"/>
+
+
+  <!-- ===================================================================
+       sync-sources
+       Copy updated project files into the AI2 source tree so that
+       "ant extensions" inside the AI2 tree picks them up.
+       =================================================================== -->
+  <target name="sync-sources"
+          description="Mirror project sources into the AI2 component source tree">
+
+    <echo>Syncing sources → ${ai2.ext.src.dir}</echo>
+
+    <!-- Protocol helper package: io.github.appinventor.legospike -->
+    <copy todir="${ai2.ext.src.dir}" overwrite="true">
+      <fileset dir="${src.dir}/io/github/appinventor/legospike"
+               includes="*.java"/>
+    </copy>
+
+    <!-- Main extension package: io.github.appinventor.legospikeprime
+         These files are placed in the same AI2 directory as the helpers,
+         following the convention already established in the AI2 tree. -->
+    <copy todir="${ai2.ext.src.dir}" overwrite="true">
+      <fileset dir="${src.dir}/io/github/appinventor/legospikeprime"
+               includes="*.java"/>
+    </copy>
+
+    <!-- Component descriptor (extension.json) -->
+    <copy file="${basedir}/config/extension.json"
+          tofile="${ai2.ext.src.dir}/extension.json"
+          overwrite="true"/>
+
+    <!-- hub_controller.py — already embedded as HUB_CONTROLLER_PROGRAM in
+         LegoSpikePrime.java, so it is not a runtime asset.  Sync it into the
+         AI2 tree source directory for reference / future asset packaging. -->
+    <copy file="${src.dir}/resources/hub_controller.py"
+          todir="${ai2.ext.src.dir}"
+          overwrite="true"/>
+
+    <echo>Sync complete.</echo>
+  </target>
+
+
+  <!-- ===================================================================
+       build-ai2
+       Invoke the App Inventor extension build pipeline.
+       This target:
+         1. Runs ExternalComponentGenerator (generates component.json from
+            Java @SimpleXxx annotations)
+         2. Compiles extension sources against AndroidRuntime.jar + android.jar
+         3. DEX-compiles via d8 to produce AndroidRuntime.jar (Dalvik bytecode)
+         4. Zips each extension directory into a .aix file
+       =================================================================== -->
+  <target name="build-ai2" depends="sync-sources"
+          description="Invoke ant extensions inside the AI2 source tree">
+
+    <echo>Invoking AI2 extension build in ${ai2.components.dir}</echo>
+    <ant dir="${ai2.components.dir}"
+         antfile="build.xml"
+         target="extensions"
+         inheritall="false"
+         inheritrefs="false">
+      <!-- Suppress optional ProGuard obfuscation pass (add -Dproguard=1 to enable) -->
+      <property name="proguard" value="0"/>
+    </ant>
+    <echo>AI2 extension build complete.</echo>
+  </target>
+
+
+  <!-- ===================================================================
+       package  (default target)
+       Build and copy the final .aix file to build/extensions/.
+       =================================================================== -->
+  <target name="package" depends="build-ai2"
+          description="Produce build/extensions/${ext.fqcn}.aix  [default]">
+
+    <mkdir dir="${output.dir}"/>
+    <copy file="${ai2.components.dir}/build/extensions/${ext.fqcn}.aix"
+          todir="${output.dir}"
+          overwrite="true"
+          failonerror="true"/>
+
+    <echo>====================================================</echo>
+    <echo>SUCCESS  →  ${output.dir}/${ext.fqcn}.aix</echo>
+    <echo>====================================================</echo>
+  </target>
+
+
+  <!-- ===================================================================
+       test
+       Compile the pure-Java protocol layer (no Android dep) and run the
+       six JUnit test suites.  Does NOT require the AI2 source tree.
+       =================================================================== -->
+  <path id="test.cp">
+    <pathelement location="${build.main}"/>
+    <pathelement location="${build.tests}"/>
+    <pathelement location="${basedir}/lib/test/junit-4.13.2.jar"/>
+    <pathelement location="${basedir}/lib/test/hamcrest-core-1.3.jar"/>
+  </path>
+
+  <target name="compile-protocol"
+          description="Compile pure-Java protocol classes (COBSEncoder, CRC32, Framer, …)">
+    <mkdir dir="${build.main}"/>
+    <!--
+      Only compile the protocol classes that have no Android / AI2 dependencies.
+      The AI2-dependent classes (BLEExtension, BluetoothConnectionListener, etc.)
+      are compiled by the AI2 build pipeline in the package target above.
+    -->
+    <javac destdir="${build.main}"
+           includeantruntime="false"
+           source="8" target="8"
+           encoding="UTF-8">
+      <src path="${src.dir}/io/github/appinventor/legospike"/>
+      <include name="COBSEncoder.java"/>
+      <include name="SpikeCRC32.java"/>
+      <include name="MessageFramer.java"/>
+      <include name="MessageBuilder.java"/>
+      <include name="ResponseParser.java"/>
+      <include name="ProgramUploader.java"/>
+      <classpath refid="test.cp"/>
+    </javac>
+  </target>
+
+  <target name="compile-tests" depends="compile-protocol"
+          description="Compile JUnit test sources">
+    <mkdir dir="${build.tests}"/>
+    <javac srcdir="${src.dir}/test/java"
+           destdir="${build.tests}"
+           includeantruntime="false"
+           source="8" target="8"
+           encoding="UTF-8"
+           classpathref="test.cp"/>
+  </target>
+
+  <target name="test" depends="compile-tests"
+          description="Run all six protocol-layer JUnit test suites">
+    <!--
+      Invoke JUnit directly via java task so we don't need the optional
+      Ant JUnit adapter JAR.  All six suites must pass; failonerror=true.
+    -->
+    <java classname="org.junit.runner.JUnitCore"
+          fork="true"
+          failonerror="true">
+      <classpath refid="test.cp"/>
+      <arg value="io.github.appinventor.legospike.COBSEncoderTest"/>
+      <arg value="io.github.appinventor.legospike.SpikeCRC32Test"/>
+      <arg value="io.github.appinventor.legospike.MessageFramerTest"/>
+      <arg value="io.github.appinventor.legospike.MessageBuilderTest"/>
+      <arg value="io.github.appinventor.legospike.ResponseParserTest"/>
+      <arg value="io.github.appinventor.legospike.ProgramUploaderTest"/>
+    </java>
+  </target>
+
+
+  <!-- ===================================================================
+       clean
+       Remove build/ from this project directory.
+       Does NOT touch the AI2 source tree.
+       =================================================================== -->
+  <target name="clean" description="Remove build/ directory">
+    <delete dir="${basedir}/build"/>
+    <echo>Cleaned ${basedir}/build/</echo>
+  </target>
+
+</project>
