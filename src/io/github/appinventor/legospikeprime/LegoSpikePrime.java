@@ -30,6 +30,7 @@ import java.util.TimerTask;
 
 import io.github.appinventor.legospike.MessageBuilder;
 import io.github.appinventor.legospike.MessageFramer;
+import io.github.appinventor.legospike.ProgramUploader;
 import io.github.appinventor.legospike.ResponseParser;
 
 /**
@@ -63,6 +64,47 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
     // Default max packet size used until InfoResponse provides the real value.
     // 512 bytes covers the maximum BLE ATT MTU; will be replaced by InfoResponse.
     private static final int DEFAULT_MAX_PACKET_SIZE = 512;
+
+    // Milliseconds between BLE write requests during a program upload.
+    // Gives the hub time to process each chunk before the next arrives.
+    private static final int CHUNK_DELAY_MS = 100;
+
+    // Hub program slot used by UploadController.
+    private static final int CONTROLLER_SLOT = 0;
+
+    /**
+     * hub_controller.py embedded as a String constant (comments stripped).
+     * Sourced from src/resources/hub_controller.py.
+     * Receives TunnelMessage payloads, drives motors via hub.port.X.motor.run(speed).
+     */
+    private static final String HUB_CONTROLLER_PROGRAM =
+        "import hub\n" +
+        "from hub import port\n" +
+        "\n" +
+        "tunnel = hub.config['module_tunnel']\n" +
+        "\n" +
+        "PORTS = {\n" +
+        "    'A': port.A, 'B': port.B, 'C': port.C,\n" +
+        "    'D': port.D, 'E': port.E, 'F': port.F,\n" +
+        "}\n" +
+        "\n" +
+        "def on_message(data):\n" +
+        "    if not data:\n" +
+        "        return\n" +
+        "    if isinstance(data, (bytes, bytearray)):\n" +
+        "        data = data.decode('utf-8')\n" +
+        "    i = 0\n" +
+        "    while i + 5 <= len(data):\n" +
+        "        p, s, n = data[i], data[i + 1], data[i + 2:i + 5]\n" +
+        "        if p in PORTS and s in ('+', '-') and n.isdigit():\n" +
+        "            PORTS[p].motor.run(int(s + n))\n" +
+        "        i += 5\n" +
+        "    tunnel.send(b'rdy')\n" +
+        "\n" +
+        "tunnel.callback(on_message)\n" +
+        "tunnel.send(b'rdy')\n" +
+        "while True:\n" +
+        "    pass\n";
 
     // =========================================================================
     // State
@@ -673,8 +715,10 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
 
             if (msgId == ResponseParser.MSG_INFO_RESPONSE) {
                 handleInfoResponse(raw);
+            } else if (msgId == 0x0D || msgId == 0x11 || msgId == 0x1F) {
+                handleStatusResponse(raw);
             }
-            // Future: TunnelMessage (0x32), status responses (0x0D, 0x11, 0x1F…), etc.
+            // Future: TunnelMessage (0x32), DeviceNotification (0x3C), etc.
         } catch (Exception e) {
             logDebug("handleCompleteFrame error: " + e);
         }
@@ -698,6 +742,32 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
         final int fm = info.fwMajor, fn = info.fwMinor, fb = info.fwBuild;
         final int mcs = maxChunkSize, mps = maxPacketSize;
         mainHandler.post(() -> InfoResponseReceived(fm, fn, fb, mcs, mps));
+    }
+
+    /**
+     * Log the success or failure of an upload-pipeline status response.
+     * Covers StartFileUploadResponse (0x0D), TransferChunkResponse (0x11),
+     * and ProgramFlowResponse (0x1F).
+     */
+    private void handleStatusResponse(byte[] raw) {
+        int     msgId   = raw[0] & 0xFF;
+        boolean success = ResponseParser.parseStatusResponse(raw);
+        String  name    = statusResponseName(msgId);
+        if (success) {
+            logDebug("Status OK: " + name + " (0x" + String.format("%02X", msgId) + ")");
+        } else {
+            logDebug("Status NACK: " + name + " (0x" + String.format("%02X", msgId) + ")");
+            ErrorOccurred(name + " not acknowledged by hub");
+        }
+    }
+
+    private static String statusResponseName(int msgId) {
+        switch (msgId) {
+            case 0x0D: return "StartFileUploadResponse";
+            case 0x11: return "TransferChunkResponse";
+            case 0x1F: return "ProgramFlowResponse";
+            default:   return "StatusResponse(0x" + String.format("%02X", msgId) + ")";
+        }
     }
 
     // =========================================================================
@@ -905,6 +975,73 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
         description = "Max program chunk size reported by InfoResponse (default 445)")
     public int MaxChunkSize() { return maxChunkSize; }
 
+    /** Fired when the hub controller program has been fully uploaded and started. */
+    @SimpleEvent(description =
+        "Fired when UploadController finishes uploading and starting the hub program")
+    public void ControllerUploaded() {
+        logDebug("ControllerUploaded");
+        EventDispatcher.dispatchEvent(this, "ControllerUploaded");
+    }
+
+    // =========================================================================
+    // Program upload and motor control
+    // =========================================================================
+
+    /**
+     * Upload the embedded hub_controller.py to slot 0 and start it.
+     * Runs on a background thread; fires {@link #ControllerUploaded()} when done.
+     * Uses the maxChunkSize from InfoResponse (or the default 445).
+     */
+    @SimpleFunction(description =
+        "Upload the hub controller program and start it (runs in background)")
+    public void UploadController() {
+        if (!isConnected) { ErrorOccurred("Not connected"); return; }
+        new Thread(() -> {
+            try {
+                ProgramUploader up = new ProgramUploader(
+                    "program.py", CONTROLLER_SLOT,
+                    HUB_CONTROLLER_PROGRAM, maxChunkSize);
+
+                logDebug("UploadController: sending StartFileUpload");
+                sendFramedMessage(up.getStartUploadMessage());
+                Thread.sleep(CHUNK_DELAY_MS);
+
+                List<byte[]> chunks = up.getChunkMessages();
+                logDebug("UploadController: " + chunks.size() + " chunk(s) to send");
+                for (int i = 0; i < chunks.size(); i++) {
+                    sendFramedMessage(chunks.get(i));
+                    logDebug("UploadController: chunk " + (i + 1) + "/" + chunks.size() + " sent");
+                    Thread.sleep(CHUNK_DELAY_MS);
+                }
+
+                logDebug("UploadController: sending Execute");
+                sendFramedMessage(up.getExecuteMessage());
+
+                mainHandler.post(() -> ControllerUploaded());
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                logDebug("UploadController interrupted");
+            } catch (Exception e) {
+                logDebug("UploadController error: " + e);
+                mainHandler.post(() -> ErrorOccurred("Upload failed: " + e.getMessage()));
+            }
+        }, "LegoSpikeUpload").start();
+    }
+
+    /**
+     * Send a raw motor command string to the running hub controller via TunnelMessage.
+     * Format: one or more 5-char chunks {@code {port A-F}{+|-}{NNN}} where NNN is deg/s.
+     * Example: {@code "A+050B-030"} → port A at +50 deg/s, port B at -30 deg/s.
+     */
+    @SimpleFunction(description =
+        "Send a motor command string (e.g. \"A+050B+050\") to the hub via TunnelMessage")
+    public void SendMotorCommand(String command) {
+        if (!isConnected) { ErrorOccurred("Not connected"); return; }
+        if (command == null || command.isEmpty()) { ErrorOccurred("Empty command"); return; }
+        logDebug("SendMotorCommand: " + command);
+        sendFramedMessage(MessageFramer.pack(MessageBuilder.buildTunnelMessage(command)));
+    }
+
     // =========================================================================
     // Motor / LED — legacy direct-BLE commands.
     // NOTE: These do NOT work with SPIKE Prime 3.x firmware (CLAUDE.md Rule 5).
@@ -918,19 +1055,36 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
         return bluetoothInterface.sendMessage(buildSetLEDCommand(red, green, blue));
     }
 
-    @SimpleFunction(description = "Run motor — NOT yet functional on SPIKE Prime 3.x")
-    public boolean RunMotor(String port, int power) {
-        if (!isConnected) { ErrorOccurred("Not connected"); return false; }
+    /**
+     * Run the motor on the given port at the given speed.
+     * Requires the hub controller program to be running (call UploadController first).
+     *
+     * @param port  port letter A–F
+     * @param speed degrees/second, clamped to [-100, 100]
+     */
+    @SimpleFunction(description =
+        "Run the motor on the given port (A-F) at the given speed (-100 to 100 deg/s)")
+    public void RunMotor(String port, int speed) {
+        if (!isConnected) { ErrorOccurred("Not connected"); return; }
         if (port == null || !port.matches("[A-Fa-f]")) {
-            ErrorOccurred("Invalid port: " + port); return false;
+            ErrorOccurred("Invalid port: " + port); return;
         }
-        power = Math.max(-100, Math.min(100, power));
-        return bluetoothInterface.sendMessage(
-            buildMotorCommand(portLetterToNumber(port.toUpperCase()), power));
+        speed = Math.max(-100, Math.min(100, speed));
+        String sign = (speed >= 0) ? "+" : "-";
+        String cmd  = String.format("%s%s%03d", port.toUpperCase(), sign, Math.abs(speed));
+        SendMotorCommand(cmd);
     }
 
-    @SimpleFunction(description = "Stop motor — NOT yet functional on SPIKE Prime 3.x")
-    public boolean StopMotor(String port) { return RunMotor(port, 0); }
+    /**
+     * Stop the motor on the given port (sends speed 0).
+     * Requires the hub controller program to be running.
+     *
+     * @param port port letter A–F
+     */
+    @SimpleFunction(description = "Stop the motor on the given port (A-F)")
+    public void StopMotor(String port) {
+        RunMotor(port, 0);
+    }
 
     // =========================================================================
     // Private helpers
