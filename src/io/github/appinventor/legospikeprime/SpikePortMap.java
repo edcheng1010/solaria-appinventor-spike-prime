@@ -1,4 +1,4 @@
-package io.github.appinventor.legospike;
+package io.github.appinventor.legospikeprime;
 
 /**
  * Utility class for mapping between SPIKE™ Prime port letters and port numbers

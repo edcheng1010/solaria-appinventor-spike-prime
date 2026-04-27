@@ -44,111 +44,48 @@ public class BluetoothInterfaceImpl {
      */
     public void setBluetoothLE(Object bluetoothLE) {
         this.bluetoothLE = bluetoothLE;
-        logDebug("BluetoothLE component set: " + bluetoothLE);
-        
-        // Register for notifications from the LEGO Wireless Protocol service
-        registerForNotifications();
+        // Note: TX notification subscription is handled by LegoSpikePrime.registerForTXNotifications()
+        // after GATT connection is established. Do NOT register here.
     }
-    
+
     /**
      * Set the LegoSpikePrime extension reference
-     * 
+     *
      * @param extension the LegoSpikePrime extension
      */
     public void setExtension(LegoSpikePrime extension) {
         this.extension = extension;
         logDebug("Extension reference set");
     }
-    
+
     /**
-     * Register for notifications from the LEGO Wireless Protocol service
-     */
-    private void registerForNotifications() {
-        if (bluetoothLE == null) {
-            logDebug("Error: BluetoothLE component not set");
-            return;
-        }
-        
-        try {
-            // Try to register for notifications from the LEGO Wireless Protocol service
-            java.lang.reflect.Method registerMethod = 
-                bluetoothLE.getClass().getMethod("RegisterForByteValues", 
-                                               String.class, String.class, Object.class, 
-                                               String.class, String.class, int.class);
-            
-            registerMethod.invoke(bluetoothLE, 
-                                 LEGO_WIRELESS_SERVICE_UUID, LEGO_WIRELESS_TX_CHAR_UUID, 
-                                 this, "OnBytesReceived", "%s", 1);
-            
-            logDebug("Registered for notifications from LEGO Wireless Protocol service");
-        } catch (Exception e) {
-            logDebug("Error registering for notifications: " + e);
-            e.printStackTrace();
-            
-            // Try to register for notifications from the Nordic UART service as fallback
-            try {
-                java.lang.reflect.Method registerMethod = 
-                    bluetoothLE.getClass().getMethod("RegisterForByteValues", 
-                                                   String.class, String.class, Object.class, 
-                                                   String.class, String.class, int.class);
-                
-                registerMethod.invoke(bluetoothLE, 
-                                     NORDIC_UART_SERVICE_UUID, NORDIC_UART_TX_CHAR_UUID, 
-                                     this, "OnBytesReceived", "%s", 1);
-                
-                logDebug("Registered for notifications from Nordic UART service");
-            } catch (Exception e2) {
-                logDebug("Error registering for notifications from Nordic UART service: " + e2);
-                e2.printStackTrace();
-            }
-        }
-    }
-    
-    /**
-     * Send a message to the connected hub
-     * 
-     * @param message the message to send
-     * @return true if the message was sent successfully
+     * Send a raw byte array to the hub's RX characteristic.
+     * Used only by the legacy SetHubLEDColor / RunMotor placeholder methods.
+     * The correct WriteBytes signature is (String, String, boolean, Object).
+     *
+     * @param message the message bytes to send
+     * @return true if sent successfully
      */
     public boolean sendMessage(byte[] message) {
         if (bluetoothLE == null) {
-            logDebug("Error: BluetoothLE component not set");
+            logDebug("sendMessage: BluetoothLE not set");
             return false;
         }
-        
         try {
-            // Try to send the message using the LEGO Wireless Protocol service
-            java.lang.reflect.Method writeMethod = 
-                bluetoothLE.getClass().getMethod("WriteBytes", 
-                                               String.class, String.class, byte[].class);
-            
-            writeMethod.invoke(bluetoothLE, 
-                             LEGO_WIRELESS_SERVICE_UUID, LEGO_WIRELESS_RX_CHAR_UUID, 
-                             message);
-            
-            logDebug("Message sent using LEGO Wireless Protocol service");
+            // Convert byte[] to Object[] of unsigned ints for WriteBytes
+            Object[] values = new Object[message.length];
+            for (int i = 0; i < message.length; i++) values[i] = message[i] & 0xFF;
+            java.lang.reflect.Method writeMethod =
+                bluetoothLE.getClass().getMethod("WriteBytes",
+                    String.class, String.class, boolean.class, Object.class);
+            writeMethod.invoke(bluetoothLE,
+                LEGO_WIRELESS_SERVICE_UUID, LEGO_WIRELESS_RX_CHAR_UUID,
+                false,
+                com.google.appinventor.components.runtime.util.YailList.makeList(values));
             return true;
         } catch (Exception e) {
-            logDebug("Error sending message using LEGO Wireless Protocol service: " + e);
-            e.printStackTrace();
-            
-            // Try to send the message using the Nordic UART service as fallback
-            try {
-                java.lang.reflect.Method writeMethod = 
-                    bluetoothLE.getClass().getMethod("WriteBytes", 
-                                                   String.class, String.class, byte[].class);
-                
-                writeMethod.invoke(bluetoothLE, 
-                                 NORDIC_UART_SERVICE_UUID, NORDIC_UART_RX_CHAR_UUID, 
-                                 message);
-                
-                logDebug("Message sent using Nordic UART service");
-                return true;
-            } catch (Exception e2) {
-                logDebug("Error sending message using Nordic UART service: " + e2);
-                e2.printStackTrace();
-                return false;
-            }
+            logDebug("sendMessage error: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+            return false;
         }
     }
     

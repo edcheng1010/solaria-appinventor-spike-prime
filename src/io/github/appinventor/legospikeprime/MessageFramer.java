@@ -1,4 +1,4 @@
-package io.github.appinventor.legospike;
+package io.github.appinventor.legospikeprime;
 
 /**
  * Wire-format framing for the LEGO SPIKE Prime 3.x BLE protocol.

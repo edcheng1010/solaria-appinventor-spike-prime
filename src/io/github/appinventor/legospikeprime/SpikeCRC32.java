@@ -1,4 +1,4 @@
-package io.github.appinventor.legospike;
+package io.github.appinventor.legospikeprime;
 
 /**
  * CRC32 checksum for the LEGO SPIKE Prime 3.x BLE protocol.

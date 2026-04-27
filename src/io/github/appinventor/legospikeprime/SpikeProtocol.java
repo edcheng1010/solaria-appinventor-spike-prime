@@ -1,4 +1,4 @@
-package io.github.appinventor.legospike;
+package io.github.appinventor.legospikeprime;
 
 /**
  * Protocol implementation for LEGO SPIKE Prime hub communication

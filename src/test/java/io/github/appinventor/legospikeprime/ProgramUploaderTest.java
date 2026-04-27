@@ -1,4 +1,4 @@
-package io.github.appinventor.legospike;
+package io.github.appinventor.legospikeprime;
 
 import org.junit.Test;
 import java.nio.charset.StandardCharsets;

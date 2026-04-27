@@ -69,15 +69,10 @@
       <fileset dir="${ai2.ext.src.dir}" includes="*.java"/>
     </delete>
 
-    <!-- Protocol helper package: io.github.appinventor.legospike -->
-    <copy todir="${ai2.ext.src.dir}" overwrite="true">
-      <fileset dir="${src.dir}/io/github/appinventor/legospike"
-               includes="*.java"/>
-    </copy>
-
-    <!-- Main extension package: io.github.appinventor.legospikeprime
-         These files are placed in the same AI2 directory as the helpers,
-         following the convention already established in the AI2 tree. -->
+    <!-- All classes (helpers + main extension) are now in legospikeprime.
+         Both packages were merged to fix the NoClassDefFoundError where
+         the AI2 build only included classes matching the extension's declared
+         package (legospikeprime), excluding the legospike helpers. -->
     <copy todir="${ai2.ext.src.dir}" overwrite="true">
       <fileset dir="${src.dir}/io/github/appinventor/legospikeprime"
                includes="*.java"/>
@@ -168,7 +163,7 @@
            includeantruntime="false"
            source="8" target="8"
            encoding="UTF-8">
-      <src path="${src.dir}/io/github/appinventor/legospike"/>
+      <src path="${src.dir}/io/github/appinventor/legospikeprime"/>
       <include name="COBSEncoder.java"/>
       <include name="SpikeCRC32.java"/>
       <include name="MessageFramer.java"/>
@@ -200,12 +195,12 @@
           fork="true"
           failonerror="true">
       <classpath refid="test.cp"/>
-      <arg value="io.github.appinventor.legospike.COBSEncoderTest"/>
-      <arg value="io.github.appinventor.legospike.SpikeCRC32Test"/>
-      <arg value="io.github.appinventor.legospike.MessageFramerTest"/>
-      <arg value="io.github.appinventor.legospike.MessageBuilderTest"/>
-      <arg value="io.github.appinventor.legospike.ResponseParserTest"/>
-      <arg value="io.github.appinventor.legospike.ProgramUploaderTest"/>
+      <arg value="io.github.appinventor.legospikeprime.COBSEncoderTest"/>
+      <arg value="io.github.appinventor.legospikeprime.SpikeCRC32Test"/>
+      <arg value="io.github.appinventor.legospikeprime.MessageFramerTest"/>
+      <arg value="io.github.appinventor.legospikeprime.MessageBuilderTest"/>
+      <arg value="io.github.appinventor.legospikeprime.ResponseParserTest"/>
+      <arg value="io.github.appinventor.legospikeprime.ProgramUploaderTest"/>
     </java>
   </target>
 

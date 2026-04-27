@@ -30,10 +30,8 @@ import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 
-import io.github.appinventor.legospike.MessageBuilder;
-import io.github.appinventor.legospike.MessageFramer;
-import io.github.appinventor.legospike.ProgramUploader;
-import io.github.appinventor.legospike.ResponseParser;
+// MessageBuilder, MessageFramer, ProgramUploader, ResponseParser are now in the
+// same package (io.github.appinventor.legospikeprime) — no imports needed.
 
 /**
  * LegoSpikePrime — MIT App Inventor extension for LEGO SPIKE Prime hubs.
@@ -268,7 +266,11 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
         // This is the primary mechanism for detecting connection / disconnection.
         // (BluetoothLE.java: addConnectionListener / BluetoothLEint.java: fires onConnected)
         try {
-            Class<?> iface = ble.getClass().getClassLoader()
+            // getClassLoader() can return null for bootstrap-loaded classes on Android.
+            // Fall back to the thread context classloader if needed.
+            ClassLoader cl = ble.getClass().getClassLoader();
+            if (cl == null) cl = Thread.currentThread().getContextClassLoader();
+            Class<?> iface = cl
                 .loadClass("edu.mit.appinventor.ble.BluetoothLE$BluetoothConnectionListener");
             connectionListenerProxy = Proxy.newProxyInstance(
                 ble.getClass().getClassLoader(),
@@ -292,7 +294,13 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
                 .invoke(ble, connectionListenerProxy);
             logDebug("BluetoothConnectionListener proxy registered");
         } catch (Exception e) {
-            logDebug("Could not register connection listener: " + e.getMessage());
+            // Log type + message so we can diagnose NPE (null message) vs ClassNotFoundException
+            logDebug("Could not register connection listener: "
+                + e.getClass().getSimpleName() + ": " + e.getMessage());
+            if (e.getCause() != null) {
+                logDebug("  Caused by: " + e.getCause().getClass().getSimpleName()
+                    + ": " + e.getCause().getMessage());
+            }
             // Connection polling fallback (started in ConnectToHub) will still detect connection.
         }
     }
