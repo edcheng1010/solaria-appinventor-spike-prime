@@ -61,9 +61,9 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
     public static final String RX_CHAR_UUID       = "0000fd02-0001-1000-8000-00805f9b34fb";
     public static final String TX_CHAR_UUID       = "0000fd02-0002-1000-8000-00805f9b34fb";
 
-    // Default max packet size used until InfoResponse provides the real value.
-    // 512 bytes covers the maximum BLE ATT MTU; will be replaced by InfoResponse.
-    private static final int DEFAULT_MAX_PACKET_SIZE = 512;
+    // 20 bytes = minimum safe BLE write size (fits within 23-byte ATT MTU floor).
+    // InfoResponse updates this to the hub's actual max_packet_size.
+    private static final int DEFAULT_MAX_PACKET_SIZE = 20;
 
     // Milliseconds between BLE write requests during a program upload.
     // Gives the hub time to process each chunk before the next arrives.
@@ -77,30 +77,26 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
      * Sourced from src/resources/hub_controller.py.
      * Receives TunnelMessage payloads, drives motors via hub.port.X.motor.run(speed).
      */
+    // Production hub controller. Lights centre LED on start. Receives TunnelMessage
+    // motor commands in 5-char chunks {port A-F}{+|-}{NNN}, runs motor at NNN×10 deg/s,
+    // acknowledges each command with tunnel.send(b'rdy').
     private static final String HUB_CONTROLLER_PROGRAM =
+        "from hub import light_matrix, port\n" +
         "import hub\n" +
-        "from hub import port\n" +
-        "\n" +
+        "import motor\n" +
+        "light_matrix.set_pixel(2, 2, 100)\n" +
         "tunnel = hub.config['module_tunnel']\n" +
-        "\n" +
-        "PORTS = {\n" +
-        "    'A': port.A, 'B': port.B, 'C': port.C,\n" +
-        "    'D': port.D, 'E': port.E, 'F': port.F,\n" +
-        "}\n" +
-        "\n" +
+        "PORTS = {'A': port.A, 'B': port.B, 'C': port.C, 'D': port.D, 'E': port.E, 'F': port.F}\n" +
         "def on_message(data):\n" +
-        "    if not data:\n" +
-        "        return\n" +
-        "    if isinstance(data, (bytes, bytearray)):\n" +
-        "        data = data.decode('utf-8')\n" +
+        "    if not isinstance(data, str):\n" +
+        "        data = ''.join(chr(b) for b in data)\n" +
         "    i = 0\n" +
         "    while i + 5 <= len(data):\n" +
         "        p, s, n = data[i], data[i + 1], data[i + 2:i + 5]\n" +
         "        if p in PORTS and s in ('+', '-') and n.isdigit():\n" +
-        "            PORTS[p].motor.run(int(s + n))\n" +
+        "            motor.run(PORTS[p], int(s + n) * 10)\n" +
         "        i += 5\n" +
         "    tunnel.send(b'rdy')\n" +
-        "\n" +
         "tunnel.callback(on_message)\n" +
         "tunnel.send(b'rdy')\n" +
         "while True:\n" +
@@ -125,6 +121,12 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
     // Effective max chunk size for program upload; updated when InfoResponse arrives.
     // 445 is the value etomasfe hard-codes when skipping InfoRequest.
     private int maxChunkSize  = 445;
+
+    // Sequential upload: flag + blocking queue so UploadController waits for
+    // each hub acknowledgment before sending the next message.
+    private volatile boolean uploadInProgress = false;
+    private final java.util.concurrent.LinkedBlockingQueue<byte[]> uploadResponseQueue =
+        new java.util.concurrent.LinkedBlockingQueue<>(8);
 
     // Dynamic proxy registered with BluetoothLE as a BluetoothConnectionListener.
     private Object connectionListenerProxy = null;
@@ -752,8 +754,14 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
     public void OnBytesReceivedFromHub(String serviceUuid,
                                        String characteristicUuid,
                                        YailList byteValues) {
+        logDebug("OnBytesReceivedFromHub: " + byteValues.size()
+            + " bytes, uuid=" + characteristicUuid);
+
         // Only handle bytes from the TX characteristic
-        if (!TX_CHAR_UUID.equalsIgnoreCase(characteristicUuid)) return;
+        if (!TX_CHAR_UUID.equalsIgnoreCase(characteristicUuid)) {
+            logDebug("  (ignored — not TX characteristic)");
+            return;
+        }
 
         // Append incoming bytes to the receive buffer
         for (Object item : byteValues.toArray()) {
@@ -761,6 +769,7 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
                 receiveBuffer.add((byte)(Integer.parseInt(item.toString()) & 0xFF));
             } catch (NumberFormatException ignored) { /* skip malformed entry */ }
         }
+        logDebug("  receiveBuffer size after append: " + receiveBuffer.size());
         processReceiveBuffer();
     }
 
@@ -775,35 +784,36 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
     }
 
     /**
-     * Scan receiveBuffer for complete SPIKE Prime frames.
-     * A frame starts with 0x01 and ends with the first 0x02 seen after that.
-     * Bytes appearing before the first 0x01 are discarded (protocol garbage).
+     * Scan receiveBuffer for complete SPIKE Prime frames and dispatch each one.
+     *
+     * Frame boundary rule: 0x02 (DELIMITER) is the ONLY mandatory frame marker.
+     *
+     * The leading 0x01 "priority byte" is OPTIONAL. We add it to outbound
+     * messages (high-priority) but the hub never adds it to its responses
+     * (low-priority). The old code skipped everything that didn't start with
+     * 0x01, silently discarding all hub responses.
+     *
+     * Scanning for 0x02 as the end marker is safe because after COBS encoding
+     * and XOR-with-0x03 the encoded body can never contain 0x02 — it only
+     * appears as the appended delimiter. MessageFramer.unpack() already handles
+     * both the with-0x01 and without-0x01 cases.
      */
     private void processReceiveBuffer() {
-        while (true) {
-            // CLAUDE.md Rule 3: safe iteration, no index out-of-bounds
-            if (receiveBuffer.isEmpty()) break;
-
-            // Skip leading bytes that are not 0x01 (frame start)
-            if ((receiveBuffer.get(0) & 0xFF) != 0x01) {
-                receiveBuffer.remove(0);
-                continue;
-            }
-
-            // Search for 0x02 (frame end) starting at index 1
+        while (!receiveBuffer.isEmpty()) {
+            // Find the next 0x02 (frame end delimiter)
             int endIdx = -1;
-            for (int i = 1; i < receiveBuffer.size(); i++) {
+            for (int i = 0; i < receiveBuffer.size(); i++) {
                 if ((receiveBuffer.get(i) & 0xFF) == 0x02) { endIdx = i; break; }
             }
 
-            if (endIdx == -1) break; // Incomplete frame — wait for more bytes
+            if (endIdx == -1) break; // No complete frame yet — wait for more bytes
 
-            // Extract the complete frame [0 .. endIdx]
+            // Extract complete frame [0 .. endIdx] inclusive
             byte[] frame = new byte[endIdx + 1];
             for (int i = 0; i <= endIdx; i++) frame[i] = receiveBuffer.get(i);
-            // Remove consumed bytes
             for (int i = 0; i <= endIdx; i++) receiveBuffer.remove(0);
 
+            logDebug("Received frame: " + frame.length + " bytes");
             handleCompleteFrame(frame);
         }
     }
@@ -824,10 +834,42 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
 
             if (msgId == ResponseParser.MSG_INFO_RESPONSE) {
                 handleInfoResponse(raw);
-            } else if (msgId == 0x0D || msgId == 0x11 || msgId == 0x1F) {
+            } else if (msgId == 0x0D || msgId == 0x11 || msgId == 0x1F || msgId == 0x47) {
                 handleStatusResponse(raw);
+            } else if (msgId == 0x20) {
+                // ProgramFlowNotification: stop=0x01 means program stopped, 0x00 means started
+                if (raw.length >= 2) {
+                    logDebug("ProgramFlowNotification: "
+                        + (raw[1] == 0 ? "program started" : "program stopped"));
+                }
+            } else if (msgId == 0x21) {
+                // ConsoleNotification — output from Python print() statements
+                if (raw.length > 1) {
+                    // strip message ID and trailing nulls, decode as UTF-8
+                    int len = raw.length - 1;
+                    while (len > 0 && raw[len] == 0) len--;
+                    String console = new String(raw, 1, len,
+                        java.nio.charset.StandardCharsets.UTF_8).trim();
+                    logDebug("HUB PRINT: " + console);
+                }
+            } else if (msgId == 0x32) {
+                // TunnelMessage from hub — payload starts at byte 3 (after [0x32][sizeL][sizeH])
+                if (raw.length >= 3) {
+                    int payloadSize = (raw[1] & 0xFF) | ((raw[2] & 0xFF) << 8);
+                    logDebug("TunnelMessage from hub: " + payloadSize + " bytes payload");
+                    if (raw.length >= 3 + payloadSize) {
+                        try {
+                            String text = new String(raw, 3, payloadSize,
+                                java.nio.charset.StandardCharsets.UTF_8).trim();
+                            logDebug("  tunnel payload (text): " + text);
+                        } catch (Exception ex) {
+                            logDebug("  tunnel payload (non-UTF8, " + payloadSize + " bytes)");
+                        }
+                    }
+                }
+            } else {
+                logDebug("Unhandled msgId=0x" + String.format("%02X", msgId));
             }
-            // Future: TunnelMessage (0x32), DeviceNotification (0x3C), etc.
         } catch (Exception e) {
             logDebug("handleCompleteFrame error: " + e);
         }
@@ -866,7 +908,13 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
             logDebug("Status OK: " + name + " (0x" + String.format("%02X", msgId) + ")");
         } else {
             logDebug("Status NACK: " + name + " (0x" + String.format("%02X", msgId) + ")");
-            ErrorOccurred(name + " not acknowledged by hub");
+            if (msgId != 0x47) { // ClearSlot NACK is normal (slot may be empty)
+                ErrorOccurred(name + " not acknowledged by hub");
+            }
+        }
+        // Unblock UploadController if it is waiting for this response
+        if (uploadInProgress) {
+            uploadResponseQueue.offer(raw);
         }
     }
 
@@ -875,6 +923,7 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
             case 0x0D: return "StartFileUploadResponse";
             case 0x11: return "TransferChunkResponse";
             case 0x1F: return "ProgramFlowResponse";
+            case 0x47: return "ClearSlotResponse";
             default:   return "StatusResponse(0x" + String.format("%02X", msgId) + ")";
         }
     }
@@ -983,6 +1032,13 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
         receiveBuffer.clear();
 
         logDebug("onConnected: " + deviceName + " (" + deviceAddress + ")");
+
+        // NOTE: RequestMTU is intentionally NOT called here.
+        // Calling it before RegisterForBytes causes the Android BLE stack to
+        // serialise the two GATT operations incorrectly, silently invalidating
+        // the TX notification subscription (zero inbound data).
+        // Instead, DEFAULT_MAX_PACKET_SIZE = 100 ensures all BLE writes fit
+        // within any negotiated MTU without RequestMTU interference.
 
         registerForTXNotifications();
 
@@ -1137,30 +1193,68 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
                     "program.py", CONTROLLER_SLOT,
                     HUB_CONTROLLER_PROGRAM, maxChunkSize);
 
+                uploadInProgress = true;
+                uploadResponseQueue.clear();
+
+                // Step 1: ClearSlotRequest — erase old program data before upload.
+                // Required by the official LEGO protocol. NACK is acceptable (slot empty).
+                logDebug("UploadController: sending ClearSlot");
+                sendFramedMessage(MessageFramer.pack(
+                    new byte[]{0x46, (byte)(CONTROLLER_SLOT & 0xFF)}));
+                awaitUploadResponse(3000); // ignore result
+
+                // Step 2: StartFileUploadRequest — MUST be acknowledged before chunks.
                 logDebug("UploadController: sending StartFileUpload");
                 sendFramedMessage(up.getStartUploadMessage());
-                Thread.sleep(CHUNK_DELAY_MS);
+                byte[] startResp = awaitUploadResponse(5000);
+                if (startResp == null) {
+                    mainHandler.post(() -> ErrorOccurred("Upload timeout: StartFileUpload"));
+                    return;
+                }
+                if (!ResponseParser.parseStatusResponse(startResp)) {
+                    mainHandler.post(() -> ErrorOccurred("StartFileUpload rejected by hub"));
+                    return;
+                }
 
+                // Step 3: TransferChunkRequests — wait for each acknowledgment.
                 List<byte[]> chunks = up.getChunkMessages();
                 logDebug("UploadController: " + chunks.size() + " chunk(s) to send");
                 for (int i = 0; i < chunks.size(); i++) {
                     sendFramedMessage(chunks.get(i));
-                    logDebug("UploadController: chunk " + (i + 1) + "/" + chunks.size() + " sent");
-                    Thread.sleep(CHUNK_DELAY_MS);
+                    byte[] chunkResp = awaitUploadResponse(5000);
+                    if (chunkResp == null) {
+                        final int ci = i + 1;
+                        mainHandler.post(() -> ErrorOccurred("Upload timeout: chunk " + ci));
+                        return;
+                    }
+                    logDebug("UploadController: chunk " + (i + 1) + "/" + chunks.size() + " acknowledged");
                 }
 
+                // Step 4: ProgramFlowRequest (Execute).
                 logDebug("UploadController: sending Execute");
                 sendFramedMessage(up.getExecuteMessage());
+                awaitUploadResponse(5000); // wait for ProgramFlowResponse
 
                 mainHandler.post(() -> ControllerUploaded());
-            } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
-                logDebug("UploadController interrupted");
+
             } catch (Exception e) {
                 logDebug("UploadController error: " + e);
                 mainHandler.post(() -> ErrorOccurred("Upload failed: " + e.getMessage()));
+            } finally {
+                uploadInProgress = false;
             }
         }, "LegoSpikeUpload").start();
+    }
+
+    /** Block the upload thread until the hub sends a status response or the timeout expires. */
+    private byte[] awaitUploadResponse(long timeoutMs) {
+        try {
+            return uploadResponseQueue.poll(timeoutMs,
+                java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
     }
 
     /**
