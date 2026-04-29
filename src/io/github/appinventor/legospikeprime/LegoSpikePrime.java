@@ -141,6 +141,12 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
     private static final int CONNECTION_POLL_INTERVAL_MS = 500;
     private static final int CONNECTION_POLL_TIMEOUT_MS  = 10000;
 
+    // Watchdog: polls IsDeviceConnected() every 2s after connection to detect
+    // spontaneous drops (hub powers off, moves out of range) when the
+    // BluetoothConnectionListener proxy is unavailable.
+    private Timer   disconnectWatchdog              = null;
+    private static final int DISCONNECT_WATCHDOG_INTERVAL_MS = 2000;
+
     // =========================================================================
     // Receive buffer for incoming TX characteristic notifications.
     // SPIKE Prime frames: [0x01] … [0x02]
@@ -492,7 +498,7 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
                 // Fire HubFound on the main thread for the new discovery
                 final String finalName = hub.getName();
                 final String finalAddr = addr;
-                mainHandler.post(() -> HubFound(finalName, finalAddr));
+                mainHandler.post(() -> HubFound(finalName));
             } else {
                 existing.bleIndex = bleIndex;
                 if (rssi != null && existing.updateRssi(rssi)) existing.updateLastSeen();
@@ -629,6 +635,10 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
             // BLE may already be disconnected; state is already cleaned up above.
             logDebug("BLE Disconnect: " + e.getMessage());
         }
+        // Trigger cleanup and HubDisconnected immediately — the BLE proxy is
+        // unavailable so onDisconnected() won't be called by the BLE stack.
+        // The guard inside onDisconnected() prevents double-firing.
+        onDisconnected();
     }
 
     /**
@@ -1032,6 +1042,35 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
         }
     }
 
+    private void startDisconnectWatchdog() {
+        stopDisconnectWatchdog();
+        if (bluetoothLE == null) return;
+        disconnectWatchdog = new Timer("LegoDisconnectWatch", true /*daemon*/);
+        disconnectWatchdog.scheduleAtFixedRate(new TimerTask() {
+            @Override public void run() {
+                if (!isConnected) { cancel(); return; }
+                try {
+                    boolean bleConn = (Boolean) bluetoothLE.getClass()
+                        .getMethod("IsDeviceConnected").invoke(bluetoothLE);
+                    if (!bleConn) {
+                        logDebug("Watchdog: hub disconnected — firing HubDisconnected");
+                        disconnectWatchdog = null;
+                        mainHandler.post(() -> onDisconnected());
+                    }
+                } catch (Exception e) {
+                    logDebug("Watchdog poll error: " + e.getMessage());
+                }
+            }
+        }, DISCONNECT_WATCHDOG_INTERVAL_MS, DISCONNECT_WATCHDOG_INTERVAL_MS);
+    }
+
+    private void stopDisconnectWatchdog() {
+        if (disconnectWatchdog != null) {
+            disconnectWatchdog.cancel();
+            disconnectWatchdog = null;
+        }
+    }
+
     // =========================================================================
     // Connection state transitions
     // =========================================================================
@@ -1061,6 +1100,11 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
         logDebug("Sending InfoRequest");
         sendFramedMessage(MessageFramer.pack(MessageBuilder.buildInfoRequest()));
 
+        // Watchdog: poll IsDeviceConnected() every 2s to detect spontaneous drops
+        // (hub powered off, out of range) since the BluetoothConnectionListener proxy
+        // is unavailable on this BLE extension version.
+        startDisconnectWatchdog();
+
         // Auto-upload the hub controller — HubConnected fires when motors are ready.
         // 500ms delay gives the GATT subscription (RegisterForBytes CCCD write)
         // time to complete before the first upload message is sent.
@@ -1070,6 +1114,7 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
     /** Called when the GATT connection is lost. */
     public void onDisconnected() {
         stopConnectionPolling();
+        stopDisconnectWatchdog();
         // Guard: if Disconnect() already cleaned up state (set isConnected=false and
         // cleared names), the BLE async callback may still fire — don't double-fire events.
         if (!isConnected && connectedDeviceName.isEmpty()) {
@@ -1120,9 +1165,9 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
      * @param deviceAddress BLE MAC address
      */
     @SimpleEvent(description = "Fired when a LEGO SPIKE Prime hub is discovered during scanning")
-    public void HubFound(String deviceName, String deviceAddress) {
-        logDebug("HubFound: " + deviceName + " (" + deviceAddress + ")");
-        EventDispatcher.dispatchEvent(this, "HubFound", deviceName, deviceAddress);
+    public void HubFound(String deviceName) {
+        logDebug("HubFound: " + deviceName);
+        EventDispatcher.dispatchEvent(this, "HubFound", deviceName);
     }
 
     /** Fired when the visible hub list changes (new / retained / lost). */
@@ -1166,13 +1211,14 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
 
     /**
      * Fired when the hub is fully connected and motors are ready to use.
-     * This is the only connection event students need.
+     * deviceName lets students confirm they connected to the right hub —
+     * important in competition arenas with multiple hubs.
      */
     @SimpleEvent(description =
-        "Fired when the hub is connected and ready — motors can now be controlled")
-    public void HubConnected() {
-        logDebug("HubConnected");
-        EventDispatcher.dispatchEvent(this, "HubConnected");
+        "Fired when the hub is connected and ready — check deviceName to confirm the right hub")
+    public void HubConnected(String deviceName) {
+        logDebug("HubConnected: " + deviceName);
+        EventDispatcher.dispatchEvent(this, "HubConnected", deviceName);
     }
 
     // =========================================================================
@@ -1233,7 +1279,8 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
                 sendFramedMessage(up.getExecuteMessage());
                 awaitUploadResponse(5000); // wait for ProgramFlowResponse
 
-                mainHandler.post(() -> HubConnected());
+                final String dn = connectedDeviceName;
+                mainHandler.post(() -> HubConnected(dn));
 
             } catch (Exception e) {
                 logDebug("UploadController error: " + e);
