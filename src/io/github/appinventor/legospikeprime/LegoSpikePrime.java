@@ -315,13 +315,13 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
     // Simple properties
     // =========================================================================
     @SimpleProperty(category = PropertyCategory.BEHAVIOR,
-        description = "Enable verbose logcat output")
+        description = "Enable verbose logcat output for debugging")
     @DesignerProperty(editorType = PropertyTypeConstants.PROPERTY_TYPE_BOOLEAN,
         defaultValue = "True")
     public void DebugMode(boolean v) { debugMode = v; }
 
     @SimpleProperty(category = PropertyCategory.BEHAVIOR,
-        description = "Enable verbose logcat output")
+        description = "Enable verbose logcat output for debugging")
     public boolean DebugMode() { return debugMode; }
 
     @SimpleProperty(category = PropertyCategory.BEHAVIOR,
@@ -334,14 +334,10 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
         description = "Custom BLE device name to match during scanning")
     public String CustomDeviceName() { return customDeviceName; }
 
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR,
-        description = "Milliseconds between RSSI-staleness checks")
-    @DesignerProperty(editorType = PropertyTypeConstants.PROPERTY_TYPE_INTEGER,
-        defaultValue = "1000")
+    /** Internal — scan timer interval is fixed at 1000ms, not student-configurable. */
     public void ScanInterval(int ms) { scanInterval = Math.max(100, ms); }
 
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR,
-        description = "Milliseconds between RSSI-staleness checks")
+    /** Internal getter. */
     public int ScanInterval() { return scanInterval; }
 
     @SimpleProperty(category = PropertyCategory.BEHAVIOR,
@@ -356,8 +352,7 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
         description = "Name of the currently connected hub, or empty string")
     public String ConnectedDeviceName() { return connectedDeviceName; }
 
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR,
-        description = "BLE address of the currently connected hub, or empty string")
+    /** Internal — raw BLE MAC address is not meaningful to students. */
     public String ConnectedDeviceAddress() { return connectedDeviceAddress; }
 
     // =========================================================================
@@ -369,14 +364,13 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
      * Attempts UUID-filtered scanning first; falls back to a general scan.
      * Fires HubFound for each qualifying device discovered.
      */
-    @SimpleFunction(description =
-        "Start scanning for LEGO SPIKE Prime hubs (service UUID 0000fd02-...)")
-    public void ScanForHub() {
+    @SimpleFunction(description = "Start scanning for LEGO SPIKE Prime hubs")
+    public void StartScanning() {
         if (bluetoothLE == null) { ErrorOccurred("BluetoothLE component not set"); return; }
         if (isScanning) StopScanning();
 
         legoHubs.clear();
-        logDebug("ScanForHub — attempting UUID-filtered scan for " + SPIKE_SERVICE_UUID);
+        logDebug("StartScanning — attempting UUID-filtered scan for " + SPIKE_SERVICE_UUID);
 
         boolean started = false;
         // Try UUID-filtered scan first (available in newer BLE extension builds).
@@ -525,7 +519,7 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
             if (!containsAddress(nowVisible, h.getAddress())) lost.add(h);
         }
         if (!gained.isEmpty() || !lost.isEmpty()) {
-            HubListChanged(hubNames(gained), hubNames(kept), hubNames(lost), LegoHubsList());
+            HubListChanged(hubNames(gained), hubNames(kept), hubNames(lost), HubList());
         }
     }
 
@@ -540,20 +534,20 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
     // =========================================================================
     @SimpleProperty(category = PropertyCategory.BEHAVIOR,
         description = "Comma-separated names of currently visible hubs")
-    public String LegoHubsList() {
+    public String HubList() {
         return hubNames(getVisibleHubs());
     }
 
     @SimpleFunction(description = "Number of visible LEGO SPIKE Prime hubs")
-    public int GetLegoHubCount() { return getVisibleHubs().size(); }
+    public int HubCount() { return getVisibleHubs().size(); }
 
     @SimpleFunction(description = "Name of hub at 1-based index in visible hub list")
-    public String GetLegoHubName(int index) {
+    public String HubName(int index) {
         List<LegoHub> v = getVisibleHubs();
         return (index >= 1 && index <= v.size()) ? v.get(index-1).getName() : "";
     }
 
-    @SimpleFunction(description = "BLE address of hub at 1-based index in visible hub list")
+    /** Internal — students connect by index; raw MAC addresses aren't student-meaningful. */
     public String GetLegoHubAddress(int index) {
         List<LegoHub> v = getVisibleHubs();
         return (index >= 1 && index <= v.size()) ? v.get(index-1).getAddress() : "";
@@ -577,6 +571,10 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
         if (index < 1 || index > visible.size()) {
             ErrorOccurred("Invalid hub index: " + index); return;
         }
+        // Cancel any in-flight connection attempt (polling or BLE connecting).
+        stopConnectionPolling();
+        pendingConnectAddress = "";
+        // Disconnect if already connected.
         if (isConnected) Disconnect();
 
         // Only stop scanning if currently scanning (CLAUDE.md Rule 4).
@@ -611,17 +609,25 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
         }
     }
 
-    /** Disconnect from the currently connected hub. */
+    /** Disconnect from the currently connected hub. Safe to call multiple times. */
     @SimpleFunction(description = "Disconnect from the currently connected hub")
     public void Disconnect() {
         stopConnectionPolling();
         pendingConnectAddress = "";
-        if (!isConnected || bluetoothLE == null) return;
+        if (bluetoothLE == null) return;
+        if (!isConnected) {
+            logDebug("Disconnect called but not connected — ignored");
+            return;
+        }
+        // Mark as disconnected immediately so re-entrant calls are blocked
+        // before the async BLE confirmation arrives via onDisconnected().
+        isConnected = false;
         logDebug("Disconnect → " + connectedDeviceName);
         try {
             bluetoothLE.getClass().getMethod("Disconnect").invoke(bluetoothLE);
         } catch (Exception e) {
-            ErrorOccurred("Disconnect failed: " + e.getMessage());
+            // BLE may already be disconnected; state is already cleaned up above.
+            logDebug("BLE Disconnect: " + e.getMessage());
         }
     }
 
@@ -635,10 +641,8 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
      *
      * @param reason human-readable failure reason from the BluetoothLE component
      */
-    @SimpleFunction(description =
-        "Wire BluetoothLE.ConnectionFailed to this method. "
-        + "Stops polling, resumes scanning, and fires ErrorOccurred with the failure reason.")
-    public void OnConnectionFailed(String reason) {
+    /** Internal: called by connection polling timeout. ErrorOccurred is the student-facing signal. */
+    private void OnConnectionFailed(String reason) {
         logDebug("OnConnectionFailed: " + reason);
         stopConnectionPolling();
         pendingConnectAddress = "";
@@ -664,7 +668,7 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
             return;
         }
         // Fallback: public RegisterForBytes (fires BytesReceived via EventDispatcher).
-        // If this path is taken, wire BluetoothLE.BytesReceived → OnBytesReceivedFromHub.
+        // If this path is taken, wire BluetoothLE.BytesReceived → OnBytesReceived.
         try {
             bluetoothLE.getClass()
                 .getMethod("RegisterForBytes", String.class, String.class, boolean.class)
@@ -723,8 +727,8 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
                 .invoke(inner, SPIKE_SERVICE_UUID, TX_CHAR_UUID, false, proxy);
             return true;
         } catch (Exception e) {
-            logDebug("Inner BLEResponseHandler: " + e.getClass().getSimpleName()
-                + ": " + e.getMessage());
+            logDebug("Inner BLEResponseHandler unavailable (" + e.getClass().getSimpleName()
+                + ") — wire BluetoothLE.BytesReceived → OnBytesReceived in your blocks");
             return false;
         }
     }
@@ -782,11 +786,14 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
      * @param byteValues      unsigned byte values from the BLE notification
      */
     /**
-     * Manual fallback: if auto-wiring via BLEResponseHandler failed, wire
-     * BluetoothLE.BytesReceived to this method from your App Inventor blocks.
-     * Not needed when registerForBytesViaInner() succeeds (normal case).
+     * Wire BluetoothLE.BytesReceived to this method in your App Inventor blocks.
+     * Required as a fallback when automatic BLE byte interception is unavailable
+     * on this BLE extension version.
      */
-    public void OnBytesReceivedFromHub(String serviceUuid,
+    @SimpleFunction(description =
+        "Wire BluetoothLE.BytesReceived to this to receive data from the hub. "
+        + "Add one block: when BluetoothLE1.BytesReceived → call LegoSpikePrime1.OnBytesReceived")
+    public void OnBytesReceived(String serviceUuid,
                                        String characteristicUuid,
                                        YailList byteValues) {
         if (!TX_CHAR_UUID.equalsIgnoreCase(characteristicUuid)) return;
@@ -795,7 +802,7 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
                 receiveBuffer.add((byte)(Integer.parseInt(item.toString()) & 0xFF));
             } catch (NumberFormatException ignored) {}
         }
-        logDebug("OnBytesReceivedFromHub (manual): " + byteValues.size() + " bytes");
+        logDebug("OnBytesReceived: " + byteValues.size() + " bytes");
         processReceiveBuffer();
     }
 
@@ -1054,17 +1061,21 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
         logDebug("Sending InfoRequest");
         sendFramedMessage(MessageFramer.pack(MessageBuilder.buildInfoRequest()));
 
-        final String n = deviceName, a = deviceAddress;
-        mainHandler.post(() -> HubConnected(n, a));
-
-        // Auto-upload the hub controller so students don't need to call
-        // UploadController manually — HubReady fires when motors are ready.
-        UploadController();
+        // Auto-upload the hub controller — HubConnected fires when motors are ready.
+        // 500ms delay gives the GATT subscription (RegisterForBytes CCCD write)
+        // time to complete before the first upload message is sent.
+        mainHandler.postDelayed(() -> UploadController(), 500);
     }
 
     /** Called when the GATT connection is lost. */
     public void onDisconnected() {
         stopConnectionPolling();
+        // Guard: if Disconnect() already cleaned up state (set isConnected=false and
+        // cleared names), the BLE async callback may still fire — don't double-fire events.
+        if (!isConnected && connectedDeviceName.isEmpty()) {
+            logDebug("onDisconnected: state already clean, skipping");
+            return;
+        }
         isConnected = false;
         final String n = connectedDeviceName;
         connectedDeviceName    = "";
@@ -1130,10 +1141,9 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
      * @param deviceName    hub BLE name
      * @param deviceAddress hub BLE MAC address
      */
-    @SimpleEvent(description = "Fired when the app connects to a SPIKE Prime hub")
-    public void HubConnected(String deviceName, String deviceAddress) {
-        logDebug("HubConnected: " + deviceName + " (" + deviceAddress + ")");
-        EventDispatcher.dispatchEvent(this, "HubConnected", deviceName, deviceAddress);
+    /** Internal only — BLE layer connected but upload not yet complete. Not fired to students. */
+    private void notifyBleConnected(String deviceName, String deviceAddress) {
+        logDebug("BLE connected (internal): " + deviceName + " (" + deviceAddress + ")");
     }
 
     /** Fired when the connection to the hub is lost. */
@@ -1155,14 +1165,14 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
     }
 
     /**
-     * Fired when the hub controller is uploaded and motors are ready to use.
-     * This is the signal to enable motor control in your app.
+     * Fired when the hub is fully connected and motors are ready to use.
+     * This is the only connection event students need.
      */
     @SimpleEvent(description =
-        "Fired when the hub is ready — connection established and motor controller running")
-    public void HubReady() {
-        logDebug("HubReady");
-        EventDispatcher.dispatchEvent(this, "HubReady");
+        "Fired when the hub is connected and ready — motors can now be controlled")
+    public void HubConnected() {
+        logDebug("HubConnected");
+        EventDispatcher.dispatchEvent(this, "HubConnected");
     }
 
     // =========================================================================
@@ -1171,7 +1181,7 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
 
     /**
      * Uploads hub_controller.py to slot 0 and starts it — called automatically
-     * from onConnected(). Fires HubReady() when motors are ready to use.
+     * from onConnected(). Fires HubConnected() when motors are ready to use.
      */
     private void UploadController() {
         if (!isConnected) { ErrorOccurred("Not connected"); return; }
@@ -1223,7 +1233,7 @@ public class LegoSpikePrime extends AndroidNonvisibleComponent {
                 sendFramedMessage(up.getExecuteMessage());
                 awaitUploadResponse(5000); // wait for ProgramFlowResponse
 
-                mainHandler.post(() -> HubReady());
+                mainHandler.post(() -> HubConnected());
 
             } catch (Exception e) {
                 logDebug("UploadController error: " + e);
