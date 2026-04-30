@@ -12,20 +12,18 @@ import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
 import com.google.appinventor.components.runtime.Component;
 import com.google.appinventor.components.runtime.ComponentContainer;
 
-import java.util.HashMap;
-import java.util.Map;
-
 /**
- * LegoSpikeMotor — individual motor control blocks.
+ * LegoSpikeMotor — individual motor control.
  * Matches LEGO SPIKE Prime "Motor Blocks Category".
  *
- * MVP blocks: StartMotor, StopMotor, SetMotorSpeed.
- *
- * Dependency: set the Connectivity property to a LegoSpikeConnectivity instance.
+ * Configure Port and Direction in the Designer or via blocks, then call
+ * StartMotor(), StopMotor(), or SetMotorSpeed(). One LegoSpikeMotor instance
+ * per physical motor is the recommended pattern.
  */
 @SimpleObject(external = true)
-@DesignerComponent(version = 2,
-    description = "Controls individual motors on a LEGO SPIKE Prime hub. "
+@DesignerComponent(version = 3,
+    description = "Controls an individual motor on a LEGO SPIKE Prime hub. "
+        + "Set Port (A-F) and Direction, then call StartMotor or StopMotor. "
         + "Set the Connectivity property to a LegoSpikeConnectivity component.",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
@@ -34,9 +32,9 @@ public class LegoSpikeMotor extends AndroidNonvisibleComponent {
 
     private LegoSpikeConnectivity connectivity;
 
-    // Per-port speed storage: StartMotor uses the speed stored by SetMotorSpeed.
-    private final Map<String, Integer> motorSpeeds = new HashMap<>();
-    private static final int DEFAULT_SPEED = 50;
+    private String port      = "A";
+    private String direction = "clockwise";
+    private int    speed     = 50;
 
     public LegoSpikeMotor(ComponentContainer container) {
         super(container.$form());
@@ -60,83 +58,87 @@ public class LegoSpikeMotor extends AndroidNonvisibleComponent {
     public Component Connectivity() { return connectivity; }
 
     // =========================================================================
-    // MVP blocks
+    // Port property — designer dropdown + block getter/setter
+    // =========================================================================
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR,
+        description = "The motor port (A–F) this component controls")
+    @DesignerProperty(
+        editorType  = PropertyTypeConstants.PROPERTY_TYPE_CHOICES,
+        editorArgs  = {"A", "B", "C", "D", "E", "F"},
+        defaultValue = "A")
+    public void Port(String value) {
+        if (value != null && value.toUpperCase().trim().matches("[A-F]")) {
+            port = value.toUpperCase().trim();
+        }
+    }
+
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR,
+        description = "The motor port (A–F) this component controls")
+    public String Port() { return port; }
+
+    // =========================================================================
+    // Direction property — designer dropdown + block getter/setter
+    // =========================================================================
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR,
+        description = "The motor direction: \"clockwise\" or \"counterclockwise\"")
+    @DesignerProperty(
+        editorType  = PropertyTypeConstants.PROPERTY_TYPE_CHOICES,
+        editorArgs  = {"clockwise", "counterclockwise"},
+        defaultValue = "clockwise")
+    public void Direction(String value) {
+        if ("clockwise".equalsIgnoreCase(value) || "counterclockwise".equalsIgnoreCase(value)) {
+            direction = value.toLowerCase();
+        }
+    }
+
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR,
+        description = "The motor direction: \"clockwise\" or \"counterclockwise\"")
+    public String Direction() { return direction; }
+
+    // =========================================================================
+    // Motor control blocks
     // =========================================================================
 
     /**
-     * Start the motor on the given port running continuously.
-     * Uses the speed set by SetMotorSpeed (default 50).
-     *
-     * @param port      port letter A–F
-     * @param direction "clockwise" or "counterclockwise"
+     * Start the motor using the configured Port, Direction, and speed.
+     * Set Port, Direction, and optionally SetMotorSpeed before calling.
      */
     @SimpleFunction(description =
-        "Start the motor on the given port (A-F) in the given direction "
-        + "(\"clockwise\" or \"counterclockwise\"). Uses the speed set by SetMotorSpeed.")
-    public void StartMotor(String port, String direction) {
+        "Start the motor using the configured Port and Direction. "
+        + "Set Port and Direction in the Designer or via blocks first.")
+    public void StartMotor() {
         if (!checkConnected()) return;
-        port = port.toUpperCase().trim();
-        if (!isValidPort(port)) { reportError("Invalid port: " + port); return; }
-
-        String dir = direction.toLowerCase().trim();
-        String dirCode;
-        if (dir.equals("clockwise") || dir.equals("cw")) {
-            dirCode = "CW";
-        } else if (dir.equals("counterclockwise") || dir.equals("ccw")) {
-            dirCode = "CCW";
-        } else {
-            reportError("Invalid direction: " + direction
-                + " — use \"clockwise\" or \"counterclockwise\"");
-            return;
-        }
-
-        int speed = motorSpeeds.containsKey(port) ? motorSpeeds.get(port) : DEFAULT_SPEED;
+        String dirCode = direction.startsWith("counter") ? "CCW" : "CW";
         connectivity.sendCommand(String.format("MTR:%s:%s:%03d", port, dirCode, speed));
     }
 
     /**
-     * Stop the motor on the given port.
-     *
-     * @param port port letter A–F
+     * Stop the motor on the configured Port.
      */
-    @SimpleFunction(description = "Stop the motor on the given port (A-F)")
-    public void StopMotor(String port) {
+    @SimpleFunction(description = "Stop the motor on the configured Port")
+    public void StopMotor() {
         if (!checkConnected()) return;
-        port = port.toUpperCase().trim();
-        if (!isValidPort(port)) { reportError("Invalid port: " + port); return; }
         connectivity.sendCommand("MTR:" + port + ":STOP");
     }
 
     /**
-     * Set the speed for a motor port (stored locally, applied on next StartMotor call).
+     * Set the speed used by the next StartMotor call.
      *
-     * @param port  port letter A–F
-     * @param speed 0–100 percent
+     * @param value 0–100 percent
      */
     @SimpleFunction(description =
-        "Set the speed (0-100) for a motor port. Applied on the next StartMotor call.")
-    public void SetMotorSpeed(String port, int speed) {
-        port  = port.toUpperCase().trim();
-        speed = Math.max(0, Math.min(100, speed));
-        if (!isValidPort(port)) { reportError("Invalid port: " + port); return; }
-        motorSpeeds.put(port, speed);
+        "Set the motor speed (0–100). Applied on the next StartMotor call.")
+    public void SetMotorSpeed(int value) {
+        speed = Math.max(0, Math.min(100, value));
     }
 
     // =========================================================================
     // Helpers
     // =========================================================================
     private boolean checkConnected() {
-        if (connectivity == null) {
-            reportError("Connectivity not set"); return false;
-        }
-        if (!connectivity.IsConnected()) {
-            reportError("Not connected to hub"); return false;
-        }
+        if (connectivity == null)       { reportError("Connectivity not set");   return false; }
+        if (!connectivity.IsConnected()){ reportError("Not connected to hub");   return false; }
         return true;
-    }
-
-    private static boolean isValidPort(String port) {
-        return port.matches("[A-F]");
     }
 
     private void reportError(String msg) {
