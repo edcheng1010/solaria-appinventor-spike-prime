@@ -2,11 +2,14 @@ package io.github.appinventor.legospikeprime;
 
 import com.google.appinventor.components.annotations.DesignerComponent;
 import com.google.appinventor.components.annotations.DesignerProperty;
+import com.google.appinventor.components.annotations.Options;
 import com.google.appinventor.components.annotations.PropertyCategory;
 import com.google.appinventor.components.annotations.SimpleFunction;
 import com.google.appinventor.components.annotations.SimpleObject;
 import com.google.appinventor.components.annotations.SimpleProperty;
 import com.google.appinventor.components.common.ComponentCategory;
+import com.google.appinventor.components.common.HubLightColor;
+import com.google.appinventor.components.common.LightMatrixImage;
 import com.google.appinventor.components.common.PropertyTypeConstants;
 import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
 import com.google.appinventor.components.runtime.Component;
@@ -75,7 +78,7 @@ public class LegoSpikeLight extends AndroidNonvisibleComponent {
         "Turn on the 5x5 light matrix with a named image. "
         + "Images: HEART, HAPPY, SMILE, SAD, CONFUSED, ANGRY, ASLEEP, SURPRISED, "
         + "YES, NO, ARROW_N, ARROW_E, ARROW_S, ARROW_W.")
-    public void TurnOnLightMatrix(String image) {
+    public void TurnOnLightMatrix(@Options(LightMatrixImage.class) String image) {
         if (!checkConnected()) return;
         if (image == null || image.isEmpty()) image = "HAPPY";
         connectivity.sendCommand("LGT:ON:" + image.toUpperCase().trim());
@@ -127,7 +130,7 @@ public class LegoSpikeLight extends AndroidNonvisibleComponent {
     @SimpleFunction(description =
         "Set the center button LED color. "
         + "Colors: RED, GREEN, BLUE, YELLOW, WHITE, CYAN, MAGENTA, ORANGE, BLACK.")
-    public void SetCenterButtonLight(String color) {
+    public void SetCenterButtonLight(@Options(HubLightColor.class) String color) {
         if (!checkConnected()) return;
         if (color == null || color.isEmpty()) color = "WHITE";
         connectivity.sendCommand("LGT:BTN:" + color.toUpperCase().trim());

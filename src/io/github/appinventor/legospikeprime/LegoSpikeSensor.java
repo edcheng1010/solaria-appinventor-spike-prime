@@ -5,13 +5,16 @@ import android.os.Looper;
 
 import com.google.appinventor.components.annotations.DesignerComponent;
 import com.google.appinventor.components.annotations.DesignerProperty;
+import com.google.appinventor.components.annotations.Options;
 import com.google.appinventor.components.annotations.PropertyCategory;
 import com.google.appinventor.components.annotations.SimpleEvent;
 import com.google.appinventor.components.annotations.SimpleFunction;
 import com.google.appinventor.components.annotations.SimpleObject;
 import com.google.appinventor.components.annotations.SimpleProperty;
 import com.google.appinventor.components.common.ComponentCategory;
+import com.google.appinventor.components.common.MotorPort;
 import com.google.appinventor.components.common.PropertyTypeConstants;
+import com.google.appinventor.components.common.TiltAxis;
 import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
 import com.google.appinventor.components.runtime.Component;
 import com.google.appinventor.components.runtime.ComponentContainer;
@@ -89,7 +92,7 @@ public class LegoSpikeSensor extends AndroidNonvisibleComponent
     @SimpleFunction(description =
         "Request the color detected by the color sensor on the given port (A-F). "
         + "Fires ColorRead when the hub responds.")
-    public void GetColor(String port) {
+    public void GetColor(@Options(MotorPort.class) String port) {
         sendSensorCommand("SEN:CLR:" + validatePort(port));
     }
 
@@ -102,7 +105,7 @@ public class LegoSpikeSensor extends AndroidNonvisibleComponent
     @SimpleFunction(description =
         "Request the distance (mm) from the distance sensor on the given port (A-F). "
         + "Fires DistanceRead when the hub responds. Returns -1 if out of range.")
-    public void GetDistance(String port) {
+    public void GetDistance(@Options(MotorPort.class) String port) {
         sendSensorCommand("SEN:DST:" + validatePort(port));
     }
 
@@ -115,7 +118,7 @@ public class LegoSpikeSensor extends AndroidNonvisibleComponent
     @SimpleFunction(description =
         "Request the force value from the force sensor on the given port (A-F). "
         + "Fires PressureRead when the hub responds.")
-    public void GetPressure(String port) {
+    public void GetPressure(@Options(MotorPort.class) String port) {
         sendSensorCommand("SEN:PRS:" + validatePort(port));
     }
 
@@ -128,7 +131,7 @@ public class LegoSpikeSensor extends AndroidNonvisibleComponent
     @SimpleFunction(description =
         "Ask whether the force sensor on the given port (A-F) is currently pressed. "
         + "Fires PressureChecked when the hub responds.")
-    public void IsPressed(String port) {
+    public void IsPressed(@Options(MotorPort.class) String port) {
         sendSensorCommand("SEN:ISP:" + validatePort(port));
     }
 
@@ -141,11 +144,11 @@ public class LegoSpikeSensor extends AndroidNonvisibleComponent
     @SimpleFunction(description =
         "Request the hub tilt angle for the given axis (\"pitch\", \"roll\", or \"yaw\"). "
         + "Fires TiltAngleRead when the hub responds.")
-    public void GetTiltAngle(String axis) {
-        if (axis == null || axis.isEmpty()) axis = "pitch";
+    public void GetTiltAngle(@Options(TiltAxis.class) String axis) {
+        if (axis == null || axis.isEmpty()) axis = "PITCH";
         String a = axis.toUpperCase().trim();
         if (!a.equals("PITCH") && !a.equals("ROLL") && !a.equals("YAW")) {
-            reportError("Invalid axis: " + axis + " — use \"pitch\", \"roll\", or \"yaw\"");
+            reportError("Invalid axis: " + axis + " — use \"Pitch\", \"Roll\", or \"Yaw\"");
             return;
         }
         sendSensorCommand("SEN:TLT:" + a);

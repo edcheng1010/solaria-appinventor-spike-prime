@@ -2,11 +2,14 @@ package io.github.appinventor.legospikeprime;
 
 import com.google.appinventor.components.annotations.DesignerComponent;
 import com.google.appinventor.components.annotations.DesignerProperty;
+import com.google.appinventor.components.annotations.Options;
 import com.google.appinventor.components.annotations.PropertyCategory;
 import com.google.appinventor.components.annotations.SimpleFunction;
 import com.google.appinventor.components.annotations.SimpleObject;
 import com.google.appinventor.components.annotations.SimpleProperty;
 import com.google.appinventor.components.common.ComponentCategory;
+import com.google.appinventor.components.common.MovementDirection;
+import com.google.appinventor.components.common.MotorPort;
 import com.google.appinventor.components.common.PropertyTypeConstants;
 import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
 import com.google.appinventor.components.runtime.Component;
@@ -72,7 +75,8 @@ public class LegoSpikeMovement extends AndroidNonvisibleComponent {
     @SimpleFunction(description =
         "Set the left and right motor ports of the drivebase (A-F). "
         + "Call once after HubConnected. Default: A = left, B = right.")
-    public void SetMovementMotors(String leftPort, String rightPort) {
+    public void SetMovementMotors(@Options(MotorPort.class) String leftPort,
+                                  @Options(MotorPort.class) String rightPort) {
         if (!checkConnected()) return;
         leftPort  = leftPort.toUpperCase().trim();
         rightPort = rightPort.toUpperCase().trim();
@@ -104,7 +108,7 @@ public class LegoSpikeMovement extends AndroidNonvisibleComponent {
     @SimpleFunction(description =
         "Start moving the drivebase. direction: \"forward\" or \"backward\". "
         + "Uses the speed set by SetMovementSpeed.")
-    public void StartMoving(String direction) {
+    public void StartMoving(@Options(MovementDirection.class) String direction) {
         if (!checkConnected()) return;
         String dir = direction.toLowerCase().trim();
         String cmd;
