@@ -32,8 +32,8 @@ import com.google.appinventor.components.runtime.EventDispatcher;
 @SimpleObject(external = true)
 @DesignerComponent(version = 4,
     description = "Reads sensors on a LEGO SPIKE Prime hub. "
-        + "Set Port and call GetColor, GetDistance, GetPressure, or IsPressed. "
-        + "Set Axis and call GetTiltAngle. Each fires an event with the result. "
+        + "Set ColorSensorPort, DistanceSensorPort, and ForceSensorPort independently "
+        + "so different sensors can be read in parallel. Set Axis for hub tilt. "
         + "Set the Connectivity property to a LegoSpikeConnectivity component.",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,
@@ -44,8 +44,10 @@ public class LegoSpikeSensor extends AndroidNonvisibleComponent
     private LegoSpikeConnectivity connectivity;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    private String port = "A";
-    private String axis = "PITCH";
+    private String colorSensorPort    = "A";
+    private String distanceSensorPort = "A";
+    private String forceSensorPort    = "A";
+    private String axis               = "PITCH";
 
     public LegoSpikeSensor(ComponentContainer container) {
         super(container.$form());
@@ -73,23 +75,54 @@ public class LegoSpikeSensor extends AndroidNonvisibleComponent
     public Component Connectivity() { return connectivity; }
 
     // =========================================================================
-    // Port property
+    // Port properties — one per sensor type so different sensors can sit on
+    // different ports and be read in parallel without switching state.
     // =========================================================================
+
     @SimpleProperty(category = PropertyCategory.BEHAVIOR,
-        description = "Sensor port (A–F) used by GetColor, GetDistance, GetPressure, and IsPressed")
+        description = "Port (A–F) where the color sensor is connected")
     @DesignerProperty(
         editorType   = PropertyTypeConstants.PROPERTY_TYPE_CHOICES,
         editorArgs   = {"A", "B", "C", "D", "E", "F"},
         defaultValue = "A")
-    public void Port(@Options(MotorPort.class) String value) {
-        if (value != null && value.toUpperCase().trim().matches("[A-F]")) {
-            port = value.toUpperCase().trim();
-        }
+    public void ColorSensorPort(@Options(MotorPort.class) String value) {
+        if (value != null && value.toUpperCase().trim().matches("[A-F]"))
+            colorSensorPort = value.toUpperCase().trim();
     }
 
     @SimpleProperty(category = PropertyCategory.BEHAVIOR,
-        description = "Sensor port (A–F) used by GetColor, GetDistance, GetPressure, and IsPressed")
-    public String Port() { return port; }
+        description = "Port (A–F) where the color sensor is connected")
+    public String ColorSensorPort() { return colorSensorPort; }
+
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR,
+        description = "Port (A–F) where the distance sensor is connected")
+    @DesignerProperty(
+        editorType   = PropertyTypeConstants.PROPERTY_TYPE_CHOICES,
+        editorArgs   = {"A", "B", "C", "D", "E", "F"},
+        defaultValue = "A")
+    public void DistanceSensorPort(@Options(MotorPort.class) String value) {
+        if (value != null && value.toUpperCase().trim().matches("[A-F]"))
+            distanceSensorPort = value.toUpperCase().trim();
+    }
+
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR,
+        description = "Port (A–F) where the distance sensor is connected")
+    public String DistanceSensorPort() { return distanceSensorPort; }
+
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR,
+        description = "Port (A–F) where the force sensor is connected (used by GetPressure and IsPressed)")
+    @DesignerProperty(
+        editorType   = PropertyTypeConstants.PROPERTY_TYPE_CHOICES,
+        editorArgs   = {"A", "B", "C", "D", "E", "F"},
+        defaultValue = "A")
+    public void ForceSensorPort(@Options(MotorPort.class) String value) {
+        if (value != null && value.toUpperCase().trim().matches("[A-F]"))
+            forceSensorPort = value.toUpperCase().trim();
+    }
+
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR,
+        description = "Port (A–F) where the force sensor is connected (used by GetPressure and IsPressed)")
+    public String ForceSensorPort() { return forceSensorPort; }
 
     // =========================================================================
     // Axis property
@@ -125,7 +158,7 @@ public class LegoSpikeSensor extends AndroidNonvisibleComponent
         "Request the color from the color sensor on the configured Port. "
         + "Fires ColorRead when the hub responds.")
     public void GetColor() {
-        sendSensorCommand("SEN:CLR:" + port);
+        sendSensorCommand("SEN:CLR:" + colorSensorPort);
     }
 
     /**
@@ -136,7 +169,7 @@ public class LegoSpikeSensor extends AndroidNonvisibleComponent
         "Request the distance (mm) from the distance sensor on the configured Port. "
         + "Fires DistanceRead when the hub responds. Returns -1 if out of range.")
     public void GetDistance() {
-        sendSensorCommand("SEN:DST:" + port);
+        sendSensorCommand("SEN:DST:" + distanceSensorPort);
     }
 
     /**
@@ -147,7 +180,7 @@ public class LegoSpikeSensor extends AndroidNonvisibleComponent
         "Request the force value from the force sensor on the configured Port. "
         + "Fires PressureRead when the hub responds.")
     public void GetPressure() {
-        sendSensorCommand("SEN:PRS:" + port);
+        sendSensorCommand("SEN:PRS:" + forceSensorPort);
     }
 
     /**
@@ -158,7 +191,7 @@ public class LegoSpikeSensor extends AndroidNonvisibleComponent
         "Ask whether the force sensor on the configured Port is pressed. "
         + "Fires PressureChecked when the hub responds.")
     public void IsPressed() {
-        sendSensorCommand("SEN:ISP:" + port);
+        sendSensorCommand("SEN:ISP:" + forceSensorPort);
     }
 
     /**
