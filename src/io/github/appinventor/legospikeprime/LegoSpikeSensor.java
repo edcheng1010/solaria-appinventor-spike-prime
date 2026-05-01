@@ -44,9 +44,9 @@ public class LegoSpikeSensor extends AndroidNonvisibleComponent
     private LegoSpikeConnectivity connectivity;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    private String colorSensorPort    = "A";
-    private String distanceSensorPort = "A";
-    private String forceSensorPort    = "A";
+    private String colorSensorPort    = "C";
+    private String distanceSensorPort = "D";
+    private String forceSensorPort    = "E";
     private String axis               = "PITCH";
 
     public LegoSpikeSensor(ComponentContainer container) {
@@ -84,7 +84,7 @@ public class LegoSpikeSensor extends AndroidNonvisibleComponent
     @DesignerProperty(
         editorType   = PropertyTypeConstants.PROPERTY_TYPE_CHOICES,
         editorArgs   = {"A", "B", "C", "D", "E", "F"},
-        defaultValue = "A")
+        defaultValue = "C")
     public void ColorSensorPort(@Options(MotorPort.class) String value) {
         if (value != null && value.toUpperCase().trim().matches("[A-F]"))
             colorSensorPort = value.toUpperCase().trim();
@@ -99,7 +99,7 @@ public class LegoSpikeSensor extends AndroidNonvisibleComponent
     @DesignerProperty(
         editorType   = PropertyTypeConstants.PROPERTY_TYPE_CHOICES,
         editorArgs   = {"A", "B", "C", "D", "E", "F"},
-        defaultValue = "A")
+        defaultValue = "D")
     public void DistanceSensorPort(@Options(MotorPort.class) String value) {
         if (value != null && value.toUpperCase().trim().matches("[A-F]"))
             distanceSensorPort = value.toUpperCase().trim();
@@ -114,7 +114,7 @@ public class LegoSpikeSensor extends AndroidNonvisibleComponent
     @DesignerProperty(
         editorType   = PropertyTypeConstants.PROPERTY_TYPE_CHOICES,
         editorArgs   = {"A", "B", "C", "D", "E", "F"},
-        defaultValue = "A")
+        defaultValue = "E")
     public void ForceSensorPort(@Options(MotorPort.class) String value) {
         if (value != null && value.toUpperCase().trim().matches("[A-F]"))
             forceSensorPort = value.toUpperCase().trim();
