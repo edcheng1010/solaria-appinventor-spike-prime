@@ -83,6 +83,16 @@
           tofile="${ai2.ext.src.dir}/extension.json"
           overwrite="true"/>
 
+    <!-- OptionList enums (MotorPort, MotorDirection) must be compiled as part of
+         AndroidRuntime (before the annotation processor runs on extension sources)
+         so they are available via Class.forName during annotation processing.
+         They live in com.google.appinventor.components.common to match the pattern
+         used by all built-in AI2 OptionList enums. -->
+    <copy todir="${ai2.components.dir}/src/com/google/appinventor/components/common"
+          overwrite="true">
+      <fileset dir="${basedir}/src/ai2-common" includes="*.java"/>
+    </copy>
+
     <!-- hub_controller.py — already embedded as HUB_CONTROLLER_PROGRAM in
          LegoSpikePrime.java, so it is not a runtime asset.  Sync it into the
          AI2 tree source directory for reference / future asset packaging. -->
