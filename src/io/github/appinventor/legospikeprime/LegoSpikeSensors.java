@@ -48,7 +48,7 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
     private String colorSensorPort    = "C";
     private String distanceSensorPort = "D";
     private String pressureSensorPort = "E";
-    private String axis               = "Pitch";
+    private String axis               = "pitch";
 
     public LegoSpikeSensors(ComponentContainer container) {
         super(container.$form());
@@ -135,14 +135,9 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
         editorArgs   = {"Pitch", "Roll", "Yaw"},
         defaultValue = "Pitch")
     public void Axis(@Options(TiltAxis.class) String value) {
-        if (value != null && !value.trim().isEmpty()) {
-            String v = value.trim();
-            String normalized = v.substring(0, 1).toUpperCase()
-                              + v.substring(1).toLowerCase();
-            if (normalized.equals("Pitch") || normalized.equals("Roll")
-                    || normalized.equals("Yaw")) {
-                axis = normalized;
-            }
+        if ("pitch".equalsIgnoreCase(value) || "roll".equalsIgnoreCase(value)
+                || "yaw".equalsIgnoreCase(value)) {
+            axis = value.toLowerCase();
         }
     }
 
@@ -286,11 +281,8 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
             case "CLR":
                 if (parts.length >= 4) {
                     final String p   = parts[2];
-                    final String raw = parts[3]; // hub sends uppercase e.g. "RED"
-                    final String titleColor = raw.isEmpty() ? raw
-                        : raw.substring(0, 1).toUpperCase()
-                          + raw.substring(1).toLowerCase(); // "Red"
-                    mainHandler.post(() -> ColorRead(p, titleColor));
+                    final String colorLower = parts[3].toLowerCase(); // "RED" -> "red"
+                    mainHandler.post(() -> ColorRead(p, colorLower));
                 }
                 break;
             case "DST":
@@ -321,7 +313,7 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
             case "TLT":
                 if (parts.length >= 4) {
                     // Hub echoes back whatever axis string we sent, now title-case
-                    final String titleAx = parts[2];
+                    final String titleAx = parts[2].toLowerCase(); // hub echoes "PITCH" -> "pitch"
                     try {
                         final int degrees = Integer.parseInt(parts[3]);
                         mainHandler.post(() -> TiltAngleRead(titleAx, degrees));

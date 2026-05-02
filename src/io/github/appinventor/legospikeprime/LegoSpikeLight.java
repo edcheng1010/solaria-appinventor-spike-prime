@@ -34,8 +34,8 @@ public class LegoSpikeLight extends AndroidNonvisibleComponent {
 
     private LegoSpikeConnectivity connectivity;
 
-    private String image       = "Happy";
-    private String buttonColor = "White";
+    private String image       = "happy";
+    private String buttonColor = "white";
 
     public LegoSpikeLight(ComponentContainer container) {
         super(container.$form());
@@ -71,7 +71,7 @@ public class LegoSpikeLight extends AndroidNonvisibleComponent {
         defaultValue = "Happy")
     public void Image(@Options(LightMatrixImage.class) String value) {
         if (value != null && !value.trim().isEmpty()) {
-            image = value.trim();  // store as-is; hub uses .upper() before IMAGES lookup
+            image = value.trim().toLowerCase();
         }
     }
 
@@ -91,9 +91,7 @@ public class LegoSpikeLight extends AndroidNonvisibleComponent {
         defaultValue = "White")
     public void ButtonColor(@Options(HubLightColor.class) String value) {
         if (value != null && !value.trim().isEmpty()) {
-            String v = value.trim();
-            buttonColor = v.isEmpty() ? v
-                : v.substring(0, 1).toUpperCase() + v.substring(1).toLowerCase();
+            buttonColor = value.trim().toLowerCase();
         }
     }
 

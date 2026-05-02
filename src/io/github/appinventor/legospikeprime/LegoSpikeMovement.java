@@ -37,7 +37,7 @@ public class LegoSpikeMovement extends AndroidNonvisibleComponent {
 
     private String leftPort      = "A";
     private String rightPort     = "B";
-    private String direction     = "Forward";
+    private String direction     = "forward";
     private int    movementSpeed = 50;
 
     public LegoSpikeMovement(ComponentContainer container) {
@@ -110,8 +110,7 @@ public class LegoSpikeMovement extends AndroidNonvisibleComponent {
         defaultValue = "Forward")
     public void Direction(@Options(MovementDirection.class) String value) {
         if ("forward".equalsIgnoreCase(value) || "backward".equalsIgnoreCase(value)) {
-            String v = value.trim();
-            direction = v.substring(0, 1).toUpperCase() + v.substring(1).toLowerCase();
+            direction = value.toLowerCase();
         }
     }
 
