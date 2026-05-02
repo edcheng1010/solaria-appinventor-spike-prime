@@ -48,7 +48,7 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
     private String colorSensorPort    = "C";
     private String distanceSensorPort = "D";
     private String pressureSensorPort = "E";
-    private String axis               = "pitch";
+    private String axis               = "Pitch";
 
     public LegoSpikeSensors(ComponentContainer container) {
         super(container.$form());
@@ -137,7 +137,8 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
     public void Axis(@Options(TiltAxis.class) String value) {
         if ("pitch".equalsIgnoreCase(value) || "roll".equalsIgnoreCase(value)
                 || "yaw".equalsIgnoreCase(value)) {
-            axis = value.toLowerCase();
+            String v = value.trim();
+            axis = v.substring(0, 1).toUpperCase() + v.substring(1).toLowerCase();
         }
     }
 
@@ -281,8 +282,11 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
             case "CLR":
                 if (parts.length >= 4) {
                     final String p   = parts[2];
-                    final String colorLower = parts[3].toLowerCase(); // "RED" -> "red"
-                    mainHandler.post(() -> ColorRead(p, colorLower));
+                    // "RED" -> "Red" (title case matches SensorColor option block values)
+                    final String raw = parts[3];
+                    final String colorTitle = raw.isEmpty() ? raw
+                        : raw.substring(0, 1).toUpperCase() + raw.substring(1).toLowerCase();
+                    mainHandler.post(() -> ColorRead(p, colorTitle));
                 }
                 break;
             case "DST":
@@ -313,7 +317,10 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
             case "TLT":
                 if (parts.length >= 4) {
                     // Hub echoes back whatever axis string we sent, now title-case
-                    final String titleAx = parts[2].toLowerCase(); // hub echoes "PITCH" -> "pitch"
+                    // hub echoes "PITCH" -> "Pitch" (title case matches TiltAxis option block values)
+                    final String rawAx = parts[2];
+                    final String titleAx = rawAx.isEmpty() ? rawAx
+                        : rawAx.substring(0, 1).toUpperCase() + rawAx.substring(1).toLowerCase();
                     try {
                         final int degrees = Integer.parseInt(parts[3]);
                         mainHandler.post(() -> TiltAngleRead(titleAx, degrees));

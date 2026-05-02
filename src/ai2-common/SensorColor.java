@@ -3,20 +3,24 @@ package com.google.appinventor.components.common;
 import java.util.HashMap;
 import java.util.Map;
 
-/** Color constants for comparing against the color parameter in ColorRead events. */
+/**
+ * Color constants for comparing against the color parameter in ColorRead events.
+ * Underlying values are title-case (e.g. "Red") matching the ColorRead event output.
+ * Setters use equalsIgnoreCase so free-text entry ("RED", "red", "Red") all work.
+ */
 public enum SensorColor implements OptionList<String> {
-  Black("black"),
-  Red("red"),
-  Green("green"),
-  Yellow("yellow"),
-  Blue("blue"),
-  White("white"),
-  Cyan("cyan"),
-  Magenta("magenta"),
-  Orange("orange"),
-  Violet("violet"),
-  Azure("azure"),
-  None("none");
+  Black("Black"),
+  Red("Red"),
+  Green("Green"),
+  Yellow("Yellow"),
+  Blue("Blue"),
+  White("White"),
+  Cyan("Cyan"),
+  Magenta("Magenta"),
+  Orange("Orange"),
+  Violet("Violet"),
+  Azure("Azure"),
+  None("None");
 
   private final String value;
 

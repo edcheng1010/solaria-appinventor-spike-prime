@@ -3,11 +3,15 @@ package com.google.appinventor.components.common;
 import java.util.HashMap;
 import java.util.Map;
 
-/** Hub tilt axis options for LegoSpikeSensors.GetTiltAngle. */
+/**
+ * Hub tilt axis options for LegoSpikeSensors.GetTiltAngle.
+ * Underlying values are title-case (e.g. "Pitch") matching the TiltAngleRead event output.
+ * Setters use equalsIgnoreCase so free-text entry ("PITCH", "pitch", "Pitch") all work.
+ */
 public enum TiltAxis implements OptionList<String> {
-  Pitch("pitch"),
-  Roll("roll"),
-  Yaw("yaw");
+  Pitch("Pitch"),
+  Roll("Roll"),
+  Yaw("Yaw");
 
   private final String value;
 
