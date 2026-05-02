@@ -5,24 +5,26 @@ import java.util.Map;
 
 /**
  * Predefined image names for LegoSpikeLight.TurnOnLightMatrix.
- * Values match the IMAGES dict in hub_controller.py.
+ * Underlying values match the enum display names (camelCase).
+ * hub_controller.py uses value.upper() before the IMAGES dict lookup so
+ * both old uppercase-underscore and new camelCase-uppercase forms are accepted.
  */
 public enum LightMatrixImage implements OptionList<String> {
-  Heart("HEART"),
-  HeartSmall("HEART_SMALL"),
-  Happy("HAPPY"),
-  Smile("SMILE"),
-  Sad("SAD"),
-  Confused("CONFUSED"),
-  Angry("ANGRY"),
-  Asleep("ASLEEP"),
-  Surprised("SURPRISED"),
-  Yes("YES"),
-  No("NO"),
-  ArrowNorth("ARROW_N"),
-  ArrowEast("ARROW_E"),
-  ArrowSouth("ARROW_S"),
-  ArrowWest("ARROW_W");
+  Heart("Heart"),
+  HeartSmall("HeartSmall"),
+  Happy("Happy"),
+  Smile("Smile"),
+  Sad("Sad"),
+  Confused("Confused"),
+  Angry("Angry"),
+  Asleep("Asleep"),
+  Surprised("Surprised"),
+  Yes("Yes"),
+  No("No"),
+  ArrowNorth("ArrowNorth"),
+  ArrowEast("ArrowEast"),
+  ArrowSouth("ArrowSouth"),
+  ArrowWest("ArrowWest");
 
   private final String value;
 

@@ -34,7 +34,7 @@ public class LegoSpikeLight extends AndroidNonvisibleComponent {
 
     private LegoSpikeConnectivity connectivity;
 
-    private String image       = "HAPPY";
+    private String image       = "Happy";
     private String buttonColor = "White";
 
     public LegoSpikeLight(ComponentContainer container) {
@@ -65,13 +65,13 @@ public class LegoSpikeLight extends AndroidNonvisibleComponent {
         description = "Image to show when TurnOnLightMatrix is called")
     @DesignerProperty(
         editorType   = PropertyTypeConstants.PROPERTY_TYPE_CHOICES,
-        editorArgs   = {"HEART", "HEART_SMALL", "HAPPY", "SMILE", "SAD", "CONFUSED",
-                        "ANGRY", "ASLEEP", "SURPRISED", "YES", "NO",
-                        "ARROW_N", "ARROW_E", "ARROW_S", "ARROW_W"},
-        defaultValue = "HAPPY")
+        editorArgs   = {"Heart", "HeartSmall", "Happy", "Smile", "Sad", "Confused",
+                        "Angry", "Asleep", "Surprised", "Yes", "No",
+                        "ArrowNorth", "ArrowEast", "ArrowSouth", "ArrowWest"},
+        defaultValue = "Happy")
     public void Image(@Options(LightMatrixImage.class) String value) {
         if (value != null && !value.trim().isEmpty()) {
-            image = value.trim().toUpperCase();
+            image = value.trim();  // store as-is; hub uses .upper() before IMAGES lookup
         }
     }
 

@@ -90,9 +90,15 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "light_matrix.set_pixel(2, 2, 100)\n" +
         "tunnel = hub.config['module_tunnel']\n" +
         "PORTS = {'A': port.A, 'B': port.B, 'C': port.C, 'D': port.D, 'E': port.E, 'F': port.F}\n" +
-        "IMAGES = {'HEART': 0, 'HEART_SMALL': 1, 'HAPPY': 2, 'SMILE': 3, 'SAD': 4,\n" +
-        "          'CONFUSED': 5, 'ANGRY': 6, 'ASLEEP': 7, 'SURPRISED': 8, 'YES': 12, 'NO': 13,\n" +
-        "          'ARROW_N': 16, 'ARROW_E': 18, 'ARROW_S': 20, 'ARROW_W': 22}\n" +
+        "IMAGES = {'HEART': 0,\n" +
+        "          'HEART_SMALL': 1, 'HEARTSMALL': 1,\n" +
+        "          'HAPPY': 2, 'SMILE': 3, 'SAD': 4,\n" +
+        "          'CONFUSED': 5, 'ANGRY': 6, 'ASLEEP': 7,\n" +
+        "          'SURPRISED': 8, 'YES': 12, 'NO': 13,\n" +
+        "          'ARROW_N': 16, 'ARROWNORTH': 16,\n" +
+        "          'ARROW_E': 18, 'ARROWEAST': 18,\n" +
+        "          'ARROW_S': 20, 'ARROWSOUTH': 20,\n" +
+        "          'ARROW_W': 22, 'ARROWWEST': 22}\n" +
         "_timer_start = time.ticks_ms()\n" +
         "def on_message(data):\n" +
         "    global _timer_start\n" +

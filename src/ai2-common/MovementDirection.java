@@ -5,8 +5,8 @@ import java.util.Map;
 
 /** Drivebase movement direction for LegoSpikeMovement.StartMoving. */
 public enum MovementDirection implements OptionList<String> {
-  Forward("forward"),
-  Backward("backward");
+  Forward("Forward"),
+  Backward("Backward");
 
   private final String value;
 

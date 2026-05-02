@@ -48,12 +48,19 @@ tunnel = hub.config['module_tunnel']
 PORTS = {'A': port.A, 'B': port.B, 'C': port.C,
          'D': port.D, 'E': port.E, 'F': port.F}
 
-# Named image index map (hub firmware image indices)
+# Named image index map (hub firmware image indices).
+# Includes both original uppercase-underscore keys and camelCase-uppercase
+# aliases so that value.upper() works for both old and new block values.
 IMAGES = {
-    'HEART': 0, 'HEART_SMALL': 1, 'HAPPY': 2, 'SMILE': 3,
-    'SAD': 4, 'CONFUSED': 5, 'ANGRY': 6, 'ASLEEP': 7,
+    'HEART': 0,
+    'HEART_SMALL': 1, 'HEARTSMALL': 1,
+    'HAPPY': 2, 'SMILE': 3, 'SAD': 4,
+    'CONFUSED': 5, 'ANGRY': 6, 'ASLEEP': 7,
     'SURPRISED': 8, 'YES': 12, 'NO': 13,
-    'ARROW_N': 16, 'ARROW_E': 18, 'ARROW_S': 20, 'ARROW_W': 22,
+    'ARROW_N': 16, 'ARROWNORTH': 16,
+    'ARROW_E': 18, 'ARROWEAST': 18,
+    'ARROW_S': 20, 'ARROWSOUTH': 20,
+    'ARROW_W': 22, 'ARROWWEST': 22,
 }
 
 _timer_start = time.ticks_ms()
