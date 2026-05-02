@@ -164,7 +164,7 @@ def on_message(data):
                 try:
                     # tilt_angles() returns (pitch, roll, yaw) in decidegrees
                     angles = hub.motion_sensor.tilt_angles()
-                    val = {'PITCH': angles[0], 'ROLL': angles[1], 'YAW': angles[2]}.get(axis, 0)
+                    val = {'PITCH': angles[0], 'ROLL': angles[1], 'YAW': angles[2]}.get(axis.upper(), 0)
                     resp = ('SEN:TLT:' + axis + ':' + str(val // 10)).encode()
                 except Exception:
                     resp = ('SEN:TLT:' + axis + ':0').encode()

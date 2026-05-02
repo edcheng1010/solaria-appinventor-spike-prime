@@ -5,20 +5,21 @@ import java.util.Map;
 
 /**
  * Color options for LegoSpikeLight.SetCenterButtonLight.
- * Values must match Python color module attribute names (getattr(color, value)).
+ * Underlying values are title-case strings. The hub Python uppercases them
+ * before the getattr(color, ...) lookup so either case is accepted.
  */
 public enum HubLightColor implements OptionList<String> {
-  Black("BLACK"),
-  Red("RED"),
-  Green("GREEN"),
-  Yellow("YELLOW"),
-  Blue("BLUE"),
-  White("WHITE"),
-  Cyan("CYAN"),
-  Magenta("MAGENTA"),
-  Orange("ORANGE"),
-  Violet("VIOLET"),
-  Azure("AZURE");
+  Black("Black"),
+  Red("Red"),
+  Green("Green"),
+  Yellow("Yellow"),
+  Blue("Blue"),
+  White("White"),
+  Cyan("Cyan"),
+  Magenta("Magenta"),
+  Orange("Orange"),
+  Violet("Violet"),
+  Azure("Azure");
 
   private final String value;
 

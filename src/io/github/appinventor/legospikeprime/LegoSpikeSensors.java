@@ -48,7 +48,7 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
     private String colorSensorPort    = "C";
     private String distanceSensorPort = "D";
     private String pressureSensorPort = "E";
-    private String axis               = "PITCH";
+    private String axis               = "Pitch";
 
     public LegoSpikeSensors(ComponentContainer container) {
         super(container.$form());
@@ -135,10 +135,13 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
         editorArgs   = {"Pitch", "Roll", "Yaw"},
         defaultValue = "Pitch")
     public void Axis(@Options(TiltAxis.class) String value) {
-        if (value != null) {
-            String v = value.trim().toUpperCase();
-            if (v.equals("PITCH") || v.equals("ROLL") || v.equals("YAW")) {
-                axis = v;
+        if (value != null && !value.trim().isEmpty()) {
+            String v = value.trim();
+            String normalized = v.substring(0, 1).toUpperCase()
+                              + v.substring(1).toLowerCase();
+            if (normalized.equals("Pitch") || normalized.equals("Roll")
+                    || normalized.equals("Yaw")) {
+                axis = normalized;
             }
         }
     }
@@ -317,10 +320,8 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
                 break;
             case "TLT":
                 if (parts.length >= 4) {
-                    final String rawAx = parts[2]; // hub sends "PITCH","ROLL","YAW"
-                    final String titleAx = rawAx.isEmpty() ? rawAx
-                        : rawAx.substring(0, 1).toUpperCase()
-                          + rawAx.substring(1).toLowerCase(); // "Pitch"
+                    // Hub echoes back whatever axis string we sent, now title-case
+                    final String titleAx = parts[2];
                     try {
                         final int degrees = Integer.parseInt(parts[3]);
                         mainHandler.post(() -> TiltAngleRead(titleAx, degrees));

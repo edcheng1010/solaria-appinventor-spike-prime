@@ -4,13 +4,13 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Hub tilt axis options for LegoSpikeSensor.GetTiltAngle.
- * Values must match the axis keys expected by hub_controller.py (SEN:TLT:<axis>).
+ * Hub tilt axis options for LegoSpikeSensors.GetTiltAngle.
+ * Underlying values are title-case strings matching the TiltAngleRead event parameter.
  */
 public enum TiltAxis implements OptionList<String> {
-  Pitch("PITCH"),
-  Roll("ROLL"),
-  Yaw("YAW");
+  Pitch("Pitch"),
+  Roll("Roll"),
+  Yaw("Yaw");
 
   private final String value;
 
