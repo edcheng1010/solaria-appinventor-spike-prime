@@ -123,18 +123,6 @@ public class LegoSpikeMovement extends AndroidNonvisibleComponent {
     // =========================================================================
 
     /**
-     * Pair the configured LeftPort and RightPort as the drivebase motors.
-     * Call once after HubConnected. Default: A = left, B = right.
-     */
-    @SimpleFunction(description =
-        "Pair the configured LeftPort and RightPort as the drivebase motors. "
-        + "Call once after HubConnected.")
-    public void SetMovementMotors() {
-        if (!checkConnected()) return;
-        connectivity.sendCommand("MOV:PAIR:" + leftPort + ":" + rightPort);
-    }
-
-    /**
      * Set the speed used by StartMoving and StartMovingWithSteering.
      * Stored locally — no command is sent to the hub.
      *
@@ -149,11 +137,14 @@ public class LegoSpikeMovement extends AndroidNonvisibleComponent {
 
     /**
      * Start moving the drivebase using the configured Direction and speed.
+     * Automatically pairs LeftPort and RightPort before moving.
      */
     @SimpleFunction(description =
-        "Start moving the drivebase using the configured Direction and speed.")
+        "Start moving the drivebase using the configured Direction and speed. "
+        + "Automatically applies the configured LeftPort and RightPort.")
     public void StartMoving() {
         if (!checkConnected()) return;
+        sendPair();
         String cmd = direction.equalsIgnoreCase("forward")
             ? String.format("MOV:FWD:%03d", movementSpeed)
             : String.format("MOV:BWD:%03d", movementSpeed);
@@ -163,15 +154,16 @@ public class LegoSpikeMovement extends AndroidNonvisibleComponent {
     /**
      * Start moving with a steering offset.
      * steering = 0: straight. steering = -100: full left. steering = +100: full right.
-     * Uses the stored speed from SetMovementSpeed.
+     * Automatically pairs LeftPort and RightPort before moving.
      *
      * @param steering –100 to +100
      */
     @SimpleFunction(description =
         "Start moving with steering (–100 to +100, 0 = straight). "
-        + "Uses the speed set by SetMovementSpeed.")
+        + "Automatically applies the configured LeftPort and RightPort.")
     public void StartMovingWithSteering(int steering) {
         if (!checkConnected()) return;
+        sendPair();
         steering = Math.max(-100, Math.min(100, steering));
         connectivity.sendCommand(
             String.format("MOV:STEER:%+d:%03d", steering, movementSpeed));
@@ -181,12 +173,19 @@ public class LegoSpikeMovement extends AndroidNonvisibleComponent {
     @SimpleFunction(description = "Stop the drivebase immediately")
     public void StopMoving() {
         if (!checkConnected()) return;
+        sendPair();
         connectivity.sendCommand("MOV:STOP");
     }
 
     // =========================================================================
     // Helpers
     // =========================================================================
+
+    /** Sends MOV:PAIR to the hub using the current LeftPort and RightPort values. */
+    private void sendPair() {
+        connectivity.sendCommand("MOV:PAIR:" + leftPort + ":" + rightPort);
+    }
+
     private boolean checkConnected() {
         if (connectivity == null) { reportError("Connectivity not set"); return false; }
         if (!connectivity.IsConnected()) { reportError("Not connected to hub"); return false; }
