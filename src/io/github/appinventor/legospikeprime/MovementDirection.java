@@ -1,20 +1,20 @@
-package com.google.appinventor.components.common;
+package io.github.appinventor.legospikeprime;
 
+import com.google.appinventor.components.common.OptionList;
 import java.util.HashMap;
 import java.util.Map;
 
-/** Drivebase movement direction for LegoSpikeMovement.StartMoving. */
+/** Drivebase movement direction for LegoSpikeMovement.Direction. */
 public enum MovementDirection implements OptionList<String> {
-  Forward("forward"),
-  Backward("backward");
+  Forward("Forward"),
+  Backward("Backward");
 
   private final String value;
-
-  MovementDirection(String value) { this.value = value; }
+  MovementDirection(String v) { this.value = v; }
 
   @Override public String toUnderlyingValue() { return value; }
 
   private static final Map<String, MovementDirection> lookup = new HashMap<>();
   static { for (MovementDirection d : MovementDirection.values()) lookup.put(d.toUnderlyingValue(), d); }
-  public static MovementDirection fromUnderlyingValue(String value) { return lookup.get(value); }
+  public static MovementDirection fromUnderlyingValue(String v) { return lookup.get(v); }
 }

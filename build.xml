@@ -92,17 +92,26 @@
           tofile="${ai2.ext.src.dir}/extension.json"
           overwrite="true"/>
 
-    <!-- OptionList enums must be compiled as part of AndroidRuntime (before the
-         annotation processor runs on extension sources) so they are available via
-         Class.forName during annotation processing. They live in
-         com.google.appinventor.components.common to match the AI2 pattern.
-         Delete any stale renamed files before copying the current set. -->
-    <delete quiet="true"
-            file="${ai2.components.dir}/src/com/google/appinventor/components/common/MotorPort.java"/>
-    <copy todir="${ai2.components.dir}/src/com/google/appinventor/components/common"
-          overwrite="true">
-      <fileset dir="${basedir}/src/ai2-common" includes="*.java"/>
-    </copy>
+    <!-- OptionList enums are now in the extension package (io.github.appinventor.legospikeprime)
+         and are synced along with all other extension .java files above.
+         They get compiled into AndroidRuntime.jar by the main AndroidRuntime build target
+         (which compiles all of ${components.src}), making them available to the annotation
+         processor via Class.forName.  They also end up in the extension's own
+         AndroidRuntime.jar (via the ExternalComponent build), making them available at
+         runtime in the MIT AI2 Companion.
+         Delete any stale copies from the old com.google.appinventor.components.common location. -->
+    <delete quiet="true">
+      <fileset dir="${ai2.components.dir}/src/com/google/appinventor/components/common">
+        <include name="Port.java"/>
+        <include name="MotorPort.java"/>
+        <include name="MotorDirection.java"/>
+        <include name="MovementDirection.java"/>
+        <include name="HubLightColor.java"/>
+        <include name="LightMatrixImage.java"/>
+        <include name="SensorColor.java"/>
+        <include name="TiltAxis.java"/>
+      </fileset>
+    </delete>
 
     <!-- hub_controller.py — already embedded as HUB_CONTROLLER_PROGRAM in
          LegoSpikePrime.java, so it is not a runtime asset.  Sync it into the
@@ -124,16 +133,75 @@
 
 
   <!-- ===================================================================
+       precompile-enums
+       The AI2 ComponentProcessor uses Class.forName to resolve @Options enum
+       classes — it needs them as pre-compiled .class files, not just source.
+       ai.javac passes a single -processorpath to javac pointing at
+       ${AnnotationProcessors-class.dir}.  We inject our pre-compiled enum
+       classes there so Class.forName finds them during every compilation pass.
+
+       Steps:
+         1. Compile OptionList.java (no deps) + our 7 enum files → enum-precompile/
+         2. Run `ant AnnotationProcessors` → creates/populates the processorpath dir
+         3. Copy our enum .class files into that dir
+         Then build-ai2 calls `ant extensions` with AnnotationProcessors.uptodate=true
+         so the AnnotationProcessors target is skipped (preserving our injected classes).
+
+       The enum source files are ALSO in the extension source directory so they get
+       compiled again into the extension's own AndroidRuntime.jar, making them
+       available at runtime in the MIT AI2 Companion.
+       =================================================================== -->
+
+  <!-- Directory where AI2 puts compiled annotation-processor classes.
+       This is the -processorpath used by ai.javac; Class.forName loads from here. -->
+  <property name="ai2.annotation-processor.dir"
+            location="${ai2.components.dir}/build/classes/AnnotationProcessors"/>
+
+  <target name="precompile-enums" depends="sync-sources">
+
+    <echo>precompile-enums step 1: compiling OptionList + enum files</echo>
+    <mkdir dir="${basedir}/build/enum-precompile"/>
+    <javac destdir="${basedir}/build/enum-precompile"
+           includeantruntime="false"
+           source="8" target="8"
+           encoding="UTF-8">
+      <!-- OptionList.java has no dependencies and can be compiled standalone -->
+      <src path="${ai2.components.dir}/src"/>
+      <include name="com/google/appinventor/components/common/OptionList.java"/>
+      <!-- Our 7 OptionList enum files -->
+      <src path="${src.dir}/io/github/appinventor/legospikeprime"/>
+      <include name="Port.java"/>
+      <include name="MotorDirection.java"/>
+      <include name="MovementDirection.java"/>
+      <include name="HubLightColor.java"/>
+      <include name="LightMatrixImage.java"/>
+      <include name="SensorColor.java"/>
+      <include name="TiltAxis.java"/>
+    </javac>
+
+    <echo>precompile-enums step 2: building AnnotationProcessors dir</echo>
+    <ant dir="${ai2.components.dir}"
+         antfile="build.xml"
+         target="AnnotationProcessors"
+         inheritall="false"
+         inheritrefs="false"/>
+
+    <echo>precompile-enums step 3: injecting enum classes into processor classpath</echo>
+    <copy todir="${ai2.annotation-processor.dir}" overwrite="true">
+      <fileset dir="${basedir}/build/enum-precompile"
+               includes="io/github/appinventor/legospikeprime/*.class"/>
+    </copy>
+
+  </target>
+
+
+  <!-- ===================================================================
        build-ai2
        Invoke the App Inventor extension build pipeline.
-       This target:
-         1. Runs ExternalComponentGenerator (generates component.json from
-            Java @SimpleXxx annotations)
-         2. Compiles extension sources against AndroidRuntime.jar + android.jar
-         3. DEX-compiles via d8 to produce AndroidRuntime.jar (Dalvik bytecode)
-         4. Zips each extension directory into a .aix file
+       Depends on precompile-enums so @Options classes are available to the
+       annotation processor via Class.forName in the patched AndroidRuntime.jar.
        =================================================================== -->
-  <target name="build-ai2" depends="sync-sources"
+  <target name="build-ai2" depends="precompile-enums"
           description="Invoke ant extensions inside the AI2 source tree">
 
     <echo>Invoking AI2 extension build in ${ai2.components.dir}</echo>
@@ -142,6 +210,10 @@
          target="extensions"
          inheritall="false"
          inheritrefs="false">
+      <!-- Skip AnnotationProcessors rebuild so our injected enum classes are preserved.
+           The AnnotationProcessors target deletes its output dir before recompiling;
+           setting this property prevents that from wiping our injected enum classes. -->
+      <property name="AnnotationProcessors.uptodate" value="true"/>
       <!-- Suppress optional ProGuard obfuscation pass (add -Dproguard=1 to enable) -->
       <property name="proguard" value="0"/>
     </ant>

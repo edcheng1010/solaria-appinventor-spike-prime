@@ -2,6 +2,7 @@ package io.github.appinventor.legospikeprime;
 
 import com.google.appinventor.components.annotations.DesignerComponent;
 import com.google.appinventor.components.annotations.DesignerProperty;
+import com.google.appinventor.components.annotations.Options;
 import com.google.appinventor.components.annotations.PropertyCategory;
 import com.google.appinventor.components.annotations.SimpleFunction;
 import com.google.appinventor.components.annotations.SimpleObject;
@@ -60,7 +61,7 @@ public class LegoSpikeLight extends AndroidNonvisibleComponent {
                         "Angry", "Asleep", "Surprised", "Yes", "No",
                         "ArrowNorth", "ArrowEast", "ArrowSouth", "ArrowWest"},
         defaultValue = "Happy")
-    public void Image(String value) {
+    public void Image(@Options(LightMatrixImage.class) String value) {
         if (value != null && !value.trim().isEmpty()) {
             image = value.trim(); // stored as-is; hub uses .upper() before IMAGES lookup
         }
@@ -81,7 +82,7 @@ public class LegoSpikeLight extends AndroidNonvisibleComponent {
         editorArgs   = {"Black", "Red", "Green", "Yellow", "Blue", "White",
                         "Cyan", "Magenta", "Orange", "Violet", "Azure"},
         defaultValue = "White")
-    public void ButtonColor(String value) {
+    public void ButtonColor(@Options(HubLightColor.class) String value) {
         if (value != null && !value.trim().isEmpty()) {
             String v = value.trim();
             buttonColor = v.substring(0, 1).toUpperCase() + v.substring(1).toLowerCase();
@@ -132,90 +133,6 @@ public class LegoSpikeLight extends AndroidNonvisibleComponent {
         if (!checkConnected()) return;
         connectivity.sendCommand("LGT:BTN:" + buttonColor);
     }
-
-    // =========================================================================
-    // Image constants — drag into the Image property setter block
-    // =========================================================================
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Image constant: Heart")
-    public String Heart() { return "Heart"; }
-
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Image constant: HeartSmall")
-    public String HeartSmall() { return "HeartSmall"; }
-
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Image constant: Happy")
-    public String Happy() { return "Happy"; }
-
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Image constant: Smile")
-    public String Smile() { return "Smile"; }
-
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Image constant: Sad")
-    public String Sad() { return "Sad"; }
-
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Image constant: Confused")
-    public String Confused() { return "Confused"; }
-
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Image constant: Angry")
-    public String Angry() { return "Angry"; }
-
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Image constant: Asleep")
-    public String Asleep() { return "Asleep"; }
-
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Image constant: Surprised")
-    public String Surprised() { return "Surprised"; }
-
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Image constant: Yes")
-    public String Yes() { return "Yes"; }
-
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Image constant: No")
-    public String No() { return "No"; }
-
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Image constant: ArrowNorth")
-    public String ArrowNorth() { return "ArrowNorth"; }
-
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Image constant: ArrowEast")
-    public String ArrowEast() { return "ArrowEast"; }
-
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Image constant: ArrowSouth")
-    public String ArrowSouth() { return "ArrowSouth"; }
-
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Image constant: ArrowWest")
-    public String ArrowWest() { return "ArrowWest"; }
-
-    // =========================================================================
-    // Button color constants — drag into the ButtonColor property setter block
-    // =========================================================================
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Color constant: Black")
-    public String Black() { return "Black"; }
-
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Color constant: Red")
-    public String Red() { return "Red"; }
-
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Color constant: Green")
-    public String Green() { return "Green"; }
-
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Color constant: Yellow")
-    public String Yellow() { return "Yellow"; }
-
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Color constant: Blue")
-    public String Blue() { return "Blue"; }
-
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Color constant: White")
-    public String White() { return "White"; }
-
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Color constant: Cyan")
-    public String Cyan() { return "Cyan"; }
-
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Color constant: Magenta")
-    public String Magenta() { return "Magenta"; }
-
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Color constant: Orange")
-    public String Orange() { return "Orange"; }
-
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Color constant: Violet")
-    public String Violet() { return "Violet"; }
-
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Color constant: Azure")
-    public String Azure() { return "Azure"; }
 
     // =========================================================================
     // Helpers

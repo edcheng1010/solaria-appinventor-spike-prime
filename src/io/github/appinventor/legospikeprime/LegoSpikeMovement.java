@@ -2,6 +2,7 @@ package io.github.appinventor.legospikeprime;
 
 import com.google.appinventor.components.annotations.DesignerComponent;
 import com.google.appinventor.components.annotations.DesignerProperty;
+import com.google.appinventor.components.annotations.Options;
 import com.google.appinventor.components.annotations.PropertyCategory;
 import com.google.appinventor.components.annotations.SimpleFunction;
 import com.google.appinventor.components.annotations.SimpleObject;
@@ -67,7 +68,7 @@ public class LegoSpikeMovement extends AndroidNonvisibleComponent {
         editorType   = PropertyTypeConstants.PROPERTY_TYPE_CHOICES,
         editorArgs   = {"A", "B", "C", "D", "E", "F"},
         defaultValue = "A")
-    public void LeftPort(String value) {
+    public void LeftPort(@Options(Port.class) String value) {
         if (value != null && value.toUpperCase().trim().matches("[A-F]")) {
             leftPort = value.toUpperCase().trim();
         }
@@ -86,7 +87,7 @@ public class LegoSpikeMovement extends AndroidNonvisibleComponent {
         editorType   = PropertyTypeConstants.PROPERTY_TYPE_CHOICES,
         editorArgs   = {"A", "B", "C", "D", "E", "F"},
         defaultValue = "B")
-    public void RightPort(String value) {
+    public void RightPort(@Options(Port.class) String value) {
         if (value != null && value.toUpperCase().trim().matches("[A-F]")) {
             rightPort = value.toUpperCase().trim();
         }
@@ -105,7 +106,7 @@ public class LegoSpikeMovement extends AndroidNonvisibleComponent {
         editorType   = PropertyTypeConstants.PROPERTY_TYPE_CHOICES,
         editorArgs   = {"Forward", "Backward"},
         defaultValue = "Forward")
-    public void Direction(String value) {
+    public void Direction(@Options(MovementDirection.class) String value) {
         if ("forward".equalsIgnoreCase(value) || "backward".equalsIgnoreCase(value)) {
             String v = value.trim();
             direction = v.substring(0, 1).toUpperCase() + v.substring(1).toLowerCase();
@@ -174,17 +175,6 @@ public class LegoSpikeMovement extends AndroidNonvisibleComponent {
         sendPair();
         connectivity.sendCommand("MOV:STOP");
     }
-
-    // =========================================================================
-    // Direction constants — drag into the Direction property setter block
-    // =========================================================================
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR,
-        description = "Direction constant: Forward. Use with set Direction to Forward.")
-    public String Forward() { return "Forward"; }
-
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR,
-        description = "Direction constant: Backward. Use with set Direction to Backward.")
-    public String Backward() { return "Backward"; }
 
     // =========================================================================
     // Helpers
