@@ -5,14 +5,12 @@ import android.os.Looper;
 
 import com.google.appinventor.components.annotations.DesignerComponent;
 import com.google.appinventor.components.annotations.DesignerProperty;
-import com.google.appinventor.components.annotations.Options;
 import com.google.appinventor.components.annotations.PropertyCategory;
 import com.google.appinventor.components.annotations.SimpleEvent;
 import com.google.appinventor.components.annotations.SimpleFunction;
 import com.google.appinventor.components.annotations.SimpleObject;
 import com.google.appinventor.components.annotations.SimpleProperty;
 import com.google.appinventor.components.common.ComponentCategory;
-import com.google.appinventor.components.common.Port;
 import com.google.appinventor.components.common.PropertyTypeConstants;
 import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
 import com.google.appinventor.components.runtime.Component;
@@ -84,7 +82,7 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
         editorType   = PropertyTypeConstants.PROPERTY_TYPE_CHOICES,
         editorArgs   = {"A", "B", "C", "D", "E", "F"},
         defaultValue = "C")
-    public void ColorSensorPort(@Options(Port.class) String value) {
+    public void ColorSensorPort(String value) {
         if (value != null && value.toUpperCase().trim().matches("[A-F]"))
             colorSensorPort = value.toUpperCase().trim();
     }
@@ -99,7 +97,7 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
         editorType   = PropertyTypeConstants.PROPERTY_TYPE_CHOICES,
         editorArgs   = {"A", "B", "C", "D", "E", "F"},
         defaultValue = "D")
-    public void DistanceSensorPort(@Options(Port.class) String value) {
+    public void DistanceSensorPort(String value) {
         if (value != null && value.toUpperCase().trim().matches("[A-F]"))
             distanceSensorPort = value.toUpperCase().trim();
     }
@@ -114,7 +112,7 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
         editorType   = PropertyTypeConstants.PROPERTY_TYPE_CHOICES,
         editorArgs   = {"A", "B", "C", "D", "E", "F"},
         defaultValue = "E")
-    public void PressureSensorPort(@Options(Port.class) String value) {
+    public void PressureSensorPort(String value) {
         if (value != null && value.toUpperCase().trim().matches("[A-F]"))
             pressureSensorPort = value.toUpperCase().trim();
     }
@@ -337,6 +335,60 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
                 break;
         }
     }
+
+    // =========================================================================
+    // Helpers
+    // =========================================================================
+    // =========================================================================
+    // Color constants — drag into comparisons with the ColorRead event's color param
+    // =========================================================================
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Color constant: Black (for ColorRead comparison)")
+    public String Black() { return "Black"; }
+
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Color constant: Red (for ColorRead comparison)")
+    public String Red() { return "Red"; }
+
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Color constant: Green (for ColorRead comparison)")
+    public String Green() { return "Green"; }
+
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Color constant: Yellow (for ColorRead comparison)")
+    public String Yellow() { return "Yellow"; }
+
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Color constant: Blue (for ColorRead comparison)")
+    public String Blue() { return "Blue"; }
+
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Color constant: White (for ColorRead comparison)")
+    public String White() { return "White"; }
+
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Color constant: Cyan (for ColorRead comparison)")
+    public String Cyan() { return "Cyan"; }
+
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Color constant: Magenta (for ColorRead comparison)")
+    public String Magenta() { return "Magenta"; }
+
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Color constant: Orange (for ColorRead comparison)")
+    public String Orange() { return "Orange"; }
+
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Color constant: Violet (for ColorRead comparison)")
+    public String Violet() { return "Violet"; }
+
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Color constant: Azure (for ColorRead comparison)")
+    public String Azure() { return "Azure"; }
+
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Color constant: None — no color detected (for ColorRead comparison)")
+    public String None() { return "None"; }
+
+    // =========================================================================
+    // Axis constants — drag into the Axis property setter or TiltAngleRead comparisons
+    // =========================================================================
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Axis constant: Pitch (tilt forward/backward)")
+    public String Pitch() { return "Pitch"; }
+
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Axis constant: Roll (tilt left/right)")
+    public String Roll() { return "Roll"; }
+
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR, description = "Axis constant: Yaw (rotation left/right)")
+    public String Yaw() { return "Yaw"; }
 
     // =========================================================================
     // Helpers

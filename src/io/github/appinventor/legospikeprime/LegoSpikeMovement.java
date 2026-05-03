@@ -2,13 +2,11 @@ package io.github.appinventor.legospikeprime;
 
 import com.google.appinventor.components.annotations.DesignerComponent;
 import com.google.appinventor.components.annotations.DesignerProperty;
-import com.google.appinventor.components.annotations.Options;
 import com.google.appinventor.components.annotations.PropertyCategory;
 import com.google.appinventor.components.annotations.SimpleFunction;
 import com.google.appinventor.components.annotations.SimpleObject;
 import com.google.appinventor.components.annotations.SimpleProperty;
 import com.google.appinventor.components.common.ComponentCategory;
-import com.google.appinventor.components.common.Port;
 import com.google.appinventor.components.common.PropertyTypeConstants;
 import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
 import com.google.appinventor.components.runtime.Component;
@@ -36,7 +34,7 @@ public class LegoSpikeMovement extends AndroidNonvisibleComponent {
 
     private String leftPort      = "A";
     private String rightPort     = "B";
-    private String direction     = "forward";
+    private String direction     = "Forward";
     private int    movementSpeed = 50;
 
     public LegoSpikeMovement(ComponentContainer container) {
@@ -69,7 +67,7 @@ public class LegoSpikeMovement extends AndroidNonvisibleComponent {
         editorType   = PropertyTypeConstants.PROPERTY_TYPE_CHOICES,
         editorArgs   = {"A", "B", "C", "D", "E", "F"},
         defaultValue = "A")
-    public void LeftPort(@Options(Port.class) String value) {
+    public void LeftPort(String value) {
         if (value != null && value.toUpperCase().trim().matches("[A-F]")) {
             leftPort = value.toUpperCase().trim();
         }
@@ -88,7 +86,7 @@ public class LegoSpikeMovement extends AndroidNonvisibleComponent {
         editorType   = PropertyTypeConstants.PROPERTY_TYPE_CHOICES,
         editorArgs   = {"A", "B", "C", "D", "E", "F"},
         defaultValue = "B")
-    public void RightPort(@Options(Port.class) String value) {
+    public void RightPort(String value) {
         if (value != null && value.toUpperCase().trim().matches("[A-F]")) {
             rightPort = value.toUpperCase().trim();
         }
@@ -109,7 +107,8 @@ public class LegoSpikeMovement extends AndroidNonvisibleComponent {
         defaultValue = "Forward")
     public void Direction(String value) {
         if ("forward".equalsIgnoreCase(value) || "backward".equalsIgnoreCase(value)) {
-            direction = value.toLowerCase();
+            String v = value.trim();
+            direction = v.substring(0, 1).toUpperCase() + v.substring(1).toLowerCase();
         }
     }
 
@@ -175,6 +174,17 @@ public class LegoSpikeMovement extends AndroidNonvisibleComponent {
         sendPair();
         connectivity.sendCommand("MOV:STOP");
     }
+
+    // =========================================================================
+    // Direction constants — drag into the Direction property setter block
+    // =========================================================================
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR,
+        description = "Direction constant: Forward. Use with set Direction to Forward.")
+    public String Forward() { return "Forward"; }
+
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR,
+        description = "Direction constant: Backward. Use with set Direction to Backward.")
+    public String Backward() { return "Backward"; }
 
     // =========================================================================
     // Helpers

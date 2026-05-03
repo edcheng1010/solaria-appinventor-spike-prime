@@ -2,10 +2,7 @@ package io.github.appinventor.legospikeprime;
 
 import com.google.appinventor.components.annotations.DesignerComponent;
 import com.google.appinventor.components.annotations.DesignerProperty;
-import com.google.appinventor.components.annotations.Options;
 import com.google.appinventor.components.annotations.PropertyCategory;
-import com.google.appinventor.components.common.MotorDirection;
-import com.google.appinventor.components.common.Port;
 import com.google.appinventor.components.annotations.SimpleFunction;
 import com.google.appinventor.components.annotations.SimpleObject;
 import com.google.appinventor.components.annotations.SimpleProperty;
@@ -15,14 +12,6 @@ import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
 import com.google.appinventor.components.runtime.Component;
 import com.google.appinventor.components.runtime.ComponentContainer;
 
-/**
- * LegoSpikeMotors — individual motor control.
- * Matches LEGO SPIKE Prime "Motor Blocks Category".
- *
- * Configure Port and Direction in the Designer or via blocks, then call
- * StartMotor(), StopMotor(), or SetMotorSpeed(). One LegoSpikeMotors instance
- * per physical motor is the recommended pattern.
- */
 @SimpleObject(external = true)
 @DesignerComponent(version = 3,
     description = "Controls an individual motor on a LEGO SPIKE Prime hub. "
@@ -36,7 +25,7 @@ public class LegoSpikeMotors extends AndroidNonvisibleComponent {
     private LegoSpikeConnectivity connectivity;
 
     private String port      = "A";
-    private String direction = "clockwise";
+    private String direction = "Clockwise";
     private int    speed     = 50;
 
     public LegoSpikeMotors(ComponentContainer container) {
@@ -61,15 +50,15 @@ public class LegoSpikeMotors extends AndroidNonvisibleComponent {
     public Component Connectivity() { return connectivity; }
 
     // =========================================================================
-    // Port property — designer dropdown + block getter/setter
+    // Port property
     // =========================================================================
     @SimpleProperty(category = PropertyCategory.BEHAVIOR,
         description = "The motor port (A–F) this component controls")
     @DesignerProperty(
-        editorType  = PropertyTypeConstants.PROPERTY_TYPE_CHOICES,
-        editorArgs  = {"A", "B", "C", "D", "E", "F"},
+        editorType   = PropertyTypeConstants.PROPERTY_TYPE_CHOICES,
+        editorArgs   = {"A", "B", "C", "D", "E", "F"},
         defaultValue = "A")
-    public void Port(@Options(Port.class) String value) {
+    public void Port(String value) {
         if (value != null && value.toUpperCase().trim().matches("[A-F]")) {
             port = value.toUpperCase().trim();
         }
@@ -80,55 +69,43 @@ public class LegoSpikeMotors extends AndroidNonvisibleComponent {
     public String Port() { return port; }
 
     // =========================================================================
-    // Direction property — designer dropdown + block getter/setter
+    // Direction property
     // =========================================================================
     @SimpleProperty(category = PropertyCategory.BEHAVIOR,
-        description = "The motor direction: \"Clockwise\" or \"Counterclockwise\"")
+        description = "The motor direction. Use the Clockwise or Counterclockwise constant blocks.")
     @DesignerProperty(
-        editorType  = PropertyTypeConstants.PROPERTY_TYPE_CHOICES,
-        editorArgs  = {"Clockwise", "Counterclockwise"},
+        editorType   = PropertyTypeConstants.PROPERTY_TYPE_CHOICES,
+        editorArgs   = {"Clockwise", "Counterclockwise"},
         defaultValue = "Clockwise")
-    public void Direction(@Options(MotorDirection.class) String value) {
+    public void Direction(String value) {
         if ("clockwise".equalsIgnoreCase(value) || "counterclockwise".equalsIgnoreCase(value)) {
-            direction = value.toLowerCase();
+            String v = value.trim();
+            direction = v.substring(0, 1).toUpperCase() + v.substring(1).toLowerCase();
         }
     }
 
     @SimpleProperty(category = PropertyCategory.BEHAVIOR,
-        description = "The motor direction: \"Clockwise\" or \"Counterclockwise\"")
+        description = "The motor direction. Use the Clockwise or Counterclockwise constant blocks.")
     public String Direction() { return direction; }
 
     // =========================================================================
     // Motor control blocks
     // =========================================================================
-
-    /**
-     * Start the motor using the configured Port, Direction, and speed.
-     * Set Port, Direction, and optionally SetMotorSpeed before calling.
-     */
     @SimpleFunction(description =
         "Start the motor using the configured Port and Direction. "
         + "Set Port and Direction in the Designer or via blocks first.")
     public void StartMotor() {
         if (!checkConnected()) return;
-        String dirCode = direction.startsWith("counter") ? "CCW" : "CW";
+        String dirCode = "counterclockwise".equalsIgnoreCase(direction) ? "CCW" : "CW";
         connectivity.sendCommand(String.format("MTR:%s:%s:%03d", port, dirCode, speed));
     }
 
-    /**
-     * Stop the motor on the configured Port.
-     */
     @SimpleFunction(description = "Stop the motor on the configured Port")
     public void StopMotor() {
         if (!checkConnected()) return;
         connectivity.sendCommand("MTR:" + port + ":STOP");
     }
 
-    /**
-     * Set the speed used by the next StartMotor call.
-     *
-     * @param value 0–100 percent
-     */
     @SimpleFunction(description =
         "Set the motor speed (0–100). Applied on the next StartMotor call.")
     public void SetMotorSpeed(int value) {
@@ -136,11 +113,22 @@ public class LegoSpikeMotors extends AndroidNonvisibleComponent {
     }
 
     // =========================================================================
+    // Direction constants — drag into the Direction property setter block
+    // =========================================================================
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR,
+        description = "Direction constant: Clockwise. Use with set Direction to Clockwise.")
+    public String Clockwise() { return "Clockwise"; }
+
+    @SimpleProperty(category = PropertyCategory.BEHAVIOR,
+        description = "Direction constant: Counterclockwise. Use with set Direction to Counterclockwise.")
+    public String Counterclockwise() { return "Counterclockwise"; }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
     private boolean checkConnected() {
-        if (connectivity == null)       { reportError("Connectivity not set");   return false; }
-        if (!connectivity.IsConnected()){ reportError("Not connected to hub");   return false; }
+        if (connectivity == null)        { reportError("Connectivity not set");  return false; }
+        if (!connectivity.IsConnected()) { reportError("Not connected to hub");  return false; }
         return true;
     }
 
