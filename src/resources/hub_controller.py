@@ -26,11 +26,15 @@
 #   SEN:TMRR           reset timer
 
 from hub import light_matrix, port
-try:
-    from hub import led as _hub_led   # direct import like light_matrix/port
-except ImportError:
-    _hub_led = None
 import hub, motor, motor_pair, time
+
+# Try every known path to the center-button LED function.
+# SPIKE Prime 3.x may expose it as a direct import or as hub.led attribute.
+_hub_led = None
+try:
+    from hub import led as _hub_led
+except Exception:
+    _hub_led = getattr(hub, 'led', None)
 
 try:
     import color_sensor, distance_sensor, force_sensor, color
@@ -166,13 +170,23 @@ def on_message(data):
             elif sub == 'PIX' and len(parts) >= 5:
                 light_matrix.set_pixel(int(parts[2]), int(parts[3]), int(parts[4]))
             elif sub == 'BTN' and len(parts) >= 3:
-                # led() must be imported directly from hub (not hub.led()).
-                # Pass the color module constant, not a raw integer.
-                if _hub_led is not None:
+                # Debug: track exactly what happens and return a diagnostic string.
+                # Java logs it via logDebug("TunnelMessage: DBG:BTN:...").
+                _btn_name = parts[2].upper()
+                if _hub_led is None:
+                    _dbg = 'no_func'
+                else:
                     try:
-                        _hub_led(getattr(color, parts[2].upper()))
-                    except Exception:
-                        pass
+                        import color as _clr
+                        _c = getattr(_clr, _btn_name, None)
+                        if _c is None:
+                            _dbg = 'no_color_attr'
+                        else:
+                            _hub_led(_c)
+                            _dbg = 'called_ok'
+                    except Exception as _e:
+                        _dbg = 'exc:' + str(_e)[:20]
+                resp = ('DBG:BTN:' + _dbg).encode()
 
         # --- Sensors ---
         elif cmd == 'SEN' and len(parts) >= 2 and _sensors_ok:

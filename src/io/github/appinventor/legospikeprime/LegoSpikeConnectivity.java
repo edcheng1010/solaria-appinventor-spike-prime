@@ -856,8 +856,10 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
                         String text = new String(raw, 3, payloadSize,
                             java.nio.charset.StandardCharsets.UTF_8).trim();
                         logDebug("TunnelMessage: " + text);
-                        // Dispatch non-rdy payloads to registered data listeners
-                        if (!"rdy".equals(text) && !"err".equals(text)) {
+                        // DBG: prefixed messages surface as ErrorOccurred for diagnosis
+                        if (text.startsWith("DBG:")) {
+                            ErrorOccurred("[Hub debug] " + text);
+                        } else if (!"rdy".equals(text) && !"err".equals(text)) {
                             for (HubDataListener l : new ArrayList<>(dataListeners)) {
                                 l.onHubData(text);
                             }
