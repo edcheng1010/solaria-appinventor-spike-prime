@@ -5,20 +5,22 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Color options for LegoSpikeLight.SetCenterButtonLight.
- * Only includes colours confirmed present in the SPIKE Prime 3.x color module.
- * (CYAN and VIOLET are absent from the firmware's color module.)
+ * All 11 center-button LED colors for SPIKE Prime 3.x (indices 0-10).
+ * Violet (2) and Cyan (5) lack color module constants in some firmware
+ * versions; the hub handler falls back to their integer index automatically.
  */
 public enum HubLightColor implements OptionList<String> {
   Black("Black"),
-  Red("Red"),
+  Magenta("Magenta"),
+  Violet("Violet"),
+  Blue("Blue"),
+  Azure("Azure"),
+  Cyan("Cyan"),
   Green("Green"),
   Yellow("Yellow"),
-  Blue("Blue"),
-  White("White"),
-  Magenta("Magenta"),
   Orange("Orange"),
-  Azure("Azure");
+  Red("Red"),
+  White("White");
 
   private final String value;
   HubLightColor(String v) { this.value = v; }
