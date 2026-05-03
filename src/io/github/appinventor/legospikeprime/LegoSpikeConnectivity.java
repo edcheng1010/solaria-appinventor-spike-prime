@@ -75,8 +75,13 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
     //   SEN:TMRR         reset timer
     // =========================================================================
     static final String HUB_CONTROLLER_PROGRAM =
-        "from hub import light_matrix, port, status_light\n" +
+        "from hub import light_matrix, port\n" +
         "import hub, motor, motor_pair, time\n" +
+        "print('hub.dir:', [x for x in dir(hub) if not x.startswith('_')])\n" +
+        "try: print('sl.type:', type(hub.status_light))\n" +
+        "except: print('sl.type: no attr')\n" +
+        "try: print('sl.dir:', [x for x in dir(hub.status_light) if not x.startswith('_')])\n" +
+        "except: print('sl.dir: no attr')\n" +
         "try:\n" +
         "    import color_sensor, distance_sensor, force_sensor, color\n" +
         "    _clr_map = {}\n" +
@@ -161,7 +166,8 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "                try:\n" +
         "                    try: _cc = getattr(color, _bn)\n" +
         "                    except AttributeError: _cc = _HUB_LED.get(_bn, 10)\n" +
-        "                    status_light.on(_cc)\n" +
+        "                    try: hub.status_light.on(_cc)\n" +
+        "                    except: hub.status_light(_cc)\n" +
         "                except: pass\n" +
         "        elif cmd == 'SEN' and len(parts) >= 2 and _sensors_ok:\n" +
         "            sub = parts[1].upper()\n" +

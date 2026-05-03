@@ -25,7 +25,7 @@
 #   SEN:TMR            read timer -> SEN:TMR:3
 #   SEN:TMRR           reset timer
 
-from hub import light_matrix, port, status_light
+from hub import light_matrix, port
 import hub, motor, motor_pair, time
 
 try:
@@ -162,18 +162,12 @@ def on_message(data):
             elif sub == 'PIX' and len(parts) >= 5:
                 light_matrix.set_pixel(int(parts[2]), int(parts[3]), int(parts[4]))
             elif sub == 'BTN' and len(parts) >= 3:
-                # status_light is imported directly from hub (same pattern as
-                # light_matrix). status_light.on(color_constant) sets the
-                # circular center button LED color.
                 _bn = parts[2].upper()
                 try:
-                    # Use color module constant; fall back to integer index
-                    # for colours not defined in this firmware (e.g. CYAN, VIOLET)
-                    try:
-                        _cc = getattr(color, _bn)
-                    except AttributeError:
-                        _cc = _HUB_LED.get(_bn, 10)
-                    status_light.on(_cc)
+                    try: _cc = getattr(color, _bn)
+                    except AttributeError: _cc = _HUB_LED.get(_bn, 10)
+                    try: hub.status_light.on(_cc)
+                    except: hub.status_light(_cc)
                 except Exception:
                     pass
 
