@@ -162,12 +162,13 @@ def on_message(data):
             elif sub == 'PIX' and len(parts) >= 5:
                 light_matrix.set_pixel(int(parts[2]), int(parts[3]), int(parts[4]))
             elif sub == 'BTN' and len(parts) >= 3:
-                # hub.light is the center button LED on SPIKE Prime 3.x
+                # hub.light.color(n) is the correct API on SPIKE Prime 3.x
+                # (hub.light dir: ['CONNECT', 'POWER', 'color'])
                 _bn = parts[2].upper()
                 try:
                     try: _cc = getattr(color, _bn)
                     except AttributeError: _cc = _HUB_LED.get(_bn, 10)
-                    hub.light.on(_cc)
+                    hub.light.color(_cc)
                 except Exception:
                     pass
 
