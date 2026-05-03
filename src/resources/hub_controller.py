@@ -26,6 +26,10 @@
 #   SEN:TMRR           reset timer
 
 from hub import light_matrix, port
+try:
+    from hub import led as _hub_led   # direct import like light_matrix/port
+except ImportError:
+    _hub_led = None
 import hub, motor, motor_pair, time
 
 try:
@@ -162,12 +166,13 @@ def on_message(data):
             elif sub == 'PIX' and len(parts) >= 5:
                 light_matrix.set_pixel(int(parts[2]), int(parts[3]), int(parts[4]))
             elif sub == 'BTN' and len(parts) >= 3:
-                # hub.led(n) takes a single color index (0-10), NOT RGB (0-255).
-                _n = _HUB_LED.get(parts[2].upper(), 10)  # default white
-                try:
-                    hub.led(_n)
-                except Exception:
-                    pass
+                # led() must be imported directly from hub (not hub.led()).
+                # Pass the color module constant, not a raw integer.
+                if _hub_led is not None:
+                    try:
+                        _hub_led(getattr(color, parts[2].upper()))
+                    except Exception:
+                        pass
 
         # --- Sensors ---
         elif cmd == 'SEN' and len(parts) >= 2 and _sensors_ok:

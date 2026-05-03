@@ -76,6 +76,10 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
     // =========================================================================
     static final String HUB_CONTROLLER_PROGRAM =
         "from hub import light_matrix, port\n" +
+        "try:\n" +
+        "    from hub import led as _hub_led\n" +
+        "except ImportError:\n" +
+        "    _hub_led = None\n" +
         "import hub, motor, motor_pair, time\n" +
         "try:\n" +
         "    import color_sensor, distance_sensor, force_sensor, color\n" +
@@ -157,9 +161,9 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "            elif sub == 'PIX' and len(parts) >= 5:\n" +
         "                light_matrix.set_pixel(int(parts[2]), int(parts[3]), int(parts[4]))\n" +
         "            elif sub == 'BTN' and len(parts) >= 3:\n" +
-        "                try:\n" +
-        "                    hub.led(_HUB_LED.get(parts[2].upper(), 10))\n" +
-        "                except: pass\n" +
+        "                if _hub_led is not None:\n" +
+        "                    try: _hub_led(getattr(color, parts[2].upper()))\n" +
+        "                    except: pass\n" +
         "        elif cmd == 'SEN' and len(parts) >= 2 and _sensors_ok:\n" +
         "            sub = parts[1].upper()\n" +
         "            if sub == 'CLR' and len(parts) >= 3:\n" +
