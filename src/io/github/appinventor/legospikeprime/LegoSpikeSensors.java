@@ -14,8 +14,6 @@ import com.google.appinventor.components.annotations.SimpleProperty;
 import com.google.appinventor.components.common.ComponentCategory;
 import com.google.appinventor.components.common.Port;
 import com.google.appinventor.components.common.PropertyTypeConstants;
-import com.google.appinventor.components.common.SensorColor;
-import com.google.appinventor.components.common.TiltAxis;
 import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
 import com.google.appinventor.components.runtime.Component;
 import com.google.appinventor.components.runtime.ComponentContainer;
@@ -134,7 +132,7 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
         editorType   = PropertyTypeConstants.PROPERTY_TYPE_CHOICES,
         editorArgs   = {"Pitch", "Roll", "Yaw"},
         defaultValue = "Pitch")
-    public void Axis(@Options(TiltAxis.class) String value) {
+    public void Axis(String value) {
         if ("pitch".equalsIgnoreCase(value) || "roll".equalsIgnoreCase(value)
                 || "yaw".equalsIgnoreCase(value)) {
             String v = value.trim();
@@ -230,20 +228,9 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
     @SimpleEvent(description =
         "Fired when the hub reports a color reading. "
         + "color: title-case name (e.g. Red, Green, None). "
-        + "Use ColorConstant block for comparison: if color = ColorConstant(Red)")
+        + "Compare with a text block: if color = \"Red\" then ...")
     public void ColorRead(String port, String color) {
         EventDispatcher.dispatchEvent(this, "ColorRead", port, color);
-    }
-
-    /**
-     * Returns a SensorColor constant string for use in ColorRead comparisons.
-     * Example: if color = ColorConstant(Red) then ...
-     */
-    @SimpleFunction(description =
-        "Returns a color constant string for comparing with the color parameter "
-        + "in ColorRead events. Example: if color = ColorConstant(Red) then ...")
-    public String ColorConstant(@Options(SensorColor.class) String color) {
-        return color;
     }
 
     @SimpleEvent(description =

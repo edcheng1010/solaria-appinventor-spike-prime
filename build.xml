@@ -69,6 +69,15 @@
       <fileset dir="${ai2.ext.src.dir}" includes="*.java"/>
     </delete>
 
+    <!--
+      Delete both the cached jar AND the compiled class directory for our extension.
+      Without this, deleting a .java file leaves stale .class files in the compiled
+      output directory which get picked up by the jar step even after full rebuild.
+    -->
+    <delete file="${ai2.components.dir}/build/AndroidRuntime.jar" quiet="true"/>
+    <delete dir="${ai2.components.dir}/build/classes/AndroidRuntime/io/github/appinventor/legospikeprime" quiet="true"/>
+    <delete dir="${ai2.components.dir}/build/externalComponents-class/io.github.appinventor.legospikeprime/io/github/appinventor/legospikeprime" quiet="true"/>
+
     <!-- All classes (helpers + main extension) are now in legospikeprime.
          Both packages were merged to fix the NoClassDefFoundError where
          the AI2 build only included classes matching the extension's declared

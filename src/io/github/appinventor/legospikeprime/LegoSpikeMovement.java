@@ -8,7 +8,6 @@ import com.google.appinventor.components.annotations.SimpleFunction;
 import com.google.appinventor.components.annotations.SimpleObject;
 import com.google.appinventor.components.annotations.SimpleProperty;
 import com.google.appinventor.components.common.ComponentCategory;
-import com.google.appinventor.components.common.MovementDirection;
 import com.google.appinventor.components.common.Port;
 import com.google.appinventor.components.common.PropertyTypeConstants;
 import com.google.appinventor.components.runtime.AndroidNonvisibleComponent;
@@ -108,7 +107,7 @@ public class LegoSpikeMovement extends AndroidNonvisibleComponent {
         editorType   = PropertyTypeConstants.PROPERTY_TYPE_CHOICES,
         editorArgs   = {"Forward", "Backward"},
         defaultValue = "Forward")
-    public void Direction(@Options(MovementDirection.class) String value) {
+    public void Direction(String value) {
         if ("forward".equalsIgnoreCase(value) || "backward".equalsIgnoreCase(value)) {
             direction = value.toLowerCase();
         }
