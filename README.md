@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="Solaria Bridge — LEGO SPIKE Prime" width="200" />
+</p>
+
 # LEGO SPIKE Prime — App Inventor BLE Extension
 
 A multi-component App Inventor extension that enables real-time Bluetooth Low Energy communication with LEGO SPIKE Prime hubs. Control motors, read sensors, and drive the LED matrix — all from App Inventor blocks on your phone or tablet.
