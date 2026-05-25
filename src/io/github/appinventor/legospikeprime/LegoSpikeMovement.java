@@ -147,10 +147,13 @@ public class LegoSpikeMovement extends AndroidNonvisibleComponent {
         long now = System.currentTimeMillis();
         if (now - lastMoveSentMs < MOVE_THROTTLE_MS) return;
         lastMoveSentMs = now;
-        String cmd = direction.equalsIgnoreCase("forward")
-            ? String.format("MOV:FWD:%s:%s:%03d", leftPort, rightPort, movementSpeed)
-            : String.format("MOV:BWD:%s:%s:%03d", leftPort, rightPort, movementSpeed);
-        connectivity.sendCommand(cmd);
+        int effectiveSpeed = direction.equalsIgnoreCase("backward") ? -movementSpeed : movementSpeed;
+        connectivity.sendSSP(
+            new SSPMessage("movement.drive")
+                .withParam("left", leftPort)
+                .withParam("right", rightPort)
+                .withParam("speed", effectiveSpeed)
+                .withParam("steering", 0));
     }
 
     @SimpleFunction(description =
@@ -161,16 +164,23 @@ public class LegoSpikeMovement extends AndroidNonvisibleComponent {
         if (now - lastMoveSentMs < MOVE_THROTTLE_MS) return;
         lastMoveSentMs = now;
         steering = Math.max(-100, Math.min(100, steering));
-        int speed = direction.equalsIgnoreCase("backward") ? -movementSpeed : movementSpeed;
-        connectivity.sendCommand(
-            String.format("MOV:STEER:%s:%s:%+d:%d", leftPort, rightPort, steering, speed));
+        int effectiveSpeed = direction.equalsIgnoreCase("backward") ? -movementSpeed : movementSpeed;
+        connectivity.sendSSP(
+            new SSPMessage("movement.drive")
+                .withParam("left", leftPort)
+                .withParam("right", rightPort)
+                .withParam("speed", effectiveSpeed)
+                .withParam("steering", steering));
     }
 
     /** Stop the drivebase immediately. */
     @SimpleFunction(description = "Stop the drivebase immediately")
     public void StopMoving() {
         if (!checkConnected()) return;
-        connectivity.sendCommand("MOV:STOP:" + leftPort + ":" + rightPort);
+        connectivity.sendSSP(
+            new SSPMessage("movement.stop")
+                .withParam("left", leftPort)
+                .withParam("right", rightPort));
     }
 
     private boolean checkConnected() {

@@ -3,6 +3,8 @@ package io.github.appinventor.legospikeprime;
 import android.os.Handler;
 import android.os.Looper;
 
+import org.json.JSONObject;
+
 import com.google.appinventor.components.annotations.DesignerComponent;
 import com.google.appinventor.components.annotations.DesignerProperty;
 import com.google.appinventor.components.annotations.Options;
@@ -46,6 +48,7 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
     private String distanceSensorPort = "D";
     private String pressureSensorPort = "E";
     private String axis               = "Pitch";
+    private long   timerStartMs       = System.currentTimeMillis();
 
     public LegoSpikeSensors(ComponentContainer container) {
         super(container.$form());
@@ -155,7 +158,8 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
         "Request the color from the color sensor on the configured Port. "
         + "Fires ColorRead when the hub responds.")
     public void GetColor() {
-        sendSensorCommand("SEN:CLR:" + colorSensorPort);
+        sendSensorSSP(new SSPMessage("sensor.read")
+            .withPort(colorSensorPort).withParam("type", "color"));
     }
 
     /**
@@ -166,7 +170,8 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
         "Request the distance (mm) from the distance sensor on the configured Port. "
         + "Fires DistanceRead when the hub responds. Returns -1 if out of range.")
     public void GetDistance() {
-        sendSensorCommand("SEN:DST:" + distanceSensorPort);
+        sendSensorSSP(new SSPMessage("sensor.read")
+            .withPort(distanceSensorPort).withParam("type", "distance"));
     }
 
     /**
@@ -177,7 +182,8 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
         "Request the force value from the force sensor on the configured Port. "
         + "Fires PressureRead when the hub responds.")
     public void GetPressure() {
-        sendSensorCommand("SEN:PRS:" + pressureSensorPort);
+        sendSensorSSP(new SSPMessage("sensor.read")
+            .withPort(pressureSensorPort).withParam("type", "force"));
     }
 
     /**
@@ -188,7 +194,8 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
         "Ask whether the force sensor on the configured Port is pressed. "
         + "Fires PressureChecked when the hub responds.")
     public void IsPressed() {
-        sendSensorCommand("SEN:ISP:" + pressureSensorPort);
+        sendSensorSSP(new SSPMessage("sensor.read")
+            .withPort(pressureSensorPort).withParam("type", "touched"));
     }
 
     /**
@@ -199,7 +206,8 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
         "Request the hub tilt angle for the configured Axis (Pitch, Roll, or Yaw). "
         + "Fires TiltAngleRead when the hub responds.")
     public void GetTiltAngle() {
-        sendSensorCommand("SEN:TLT:" + axis);
+        sendSensorSSP(new SSPMessage("sensor.read")
+            .withPort("imu").withParam("type", axis.toLowerCase()));
     }
 
     /**
@@ -210,14 +218,16 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
         "Request the elapsed time (seconds) since the last ResetTimer. "
         + "Fires TimerRead when the hub responds.")
     public void GetTimer() {
-        sendSensorCommand("SEN:TMR");
+        // Timer is now client-side; fire event directly
+        long elapsed = (System.currentTimeMillis() - timerStartMs) / 1000;
+        final long e = elapsed;
+        mainHandler.post(() -> TimerRead((int) e));
     }
 
     /** Reset the hub timer to zero. */
     @SimpleFunction(description = "Reset the hub timer to zero")
     public void ResetTimer() {
-        if (!checkConnected()) return;
-        connectivity.sendCommand("SEN:TMRR");
+        timerStartMs = System.currentTimeMillis();
     }
 
     // =========================================================================
@@ -265,76 +275,70 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
     }
 
     // =========================================================================
-    // HubDataListener — parse sensor responses
+    // HubDataListener — parse SSP v0.6 JSON sensor responses
     // =========================================================================
     @Override
     public void onHubData(String data) {
-        if (data == null || !data.startsWith("SEN:")) return;
-        String[] parts = data.split(":");
-        if (parts.length < 3) return;
+        if (data == null || !data.startsWith("{")) return;
+        try {
+            JSONObject obj = new JSONObject(data);
+            if (!"sensor".equals(obj.optString("event"))) return;
 
-        final String type = parts[1];
+            final String port = obj.optString("port");
+            final String type = obj.optString("type");
+            final Object val  = obj.opt("value");
 
-        switch (type) {
-            case "CLR":
-                if (parts.length >= 4) {
-                    final String p   = parts[2];
-                    // "RED" -> "Red" (title case matches SensorColor option block values)
-                    final String raw = parts[3];
+            switch (type) {
+                case "color": {
+                    // "red" → "Red" (title-case matches SensorColor option block values)
+                    String raw = val != null ? val.toString() : "";
                     final String colorTitle = raw.isEmpty() ? raw
                         : raw.substring(0, 1).toUpperCase() + raw.substring(1).toLowerCase();
-                    mainHandler.post(() -> ColorRead(p, colorTitle));
+                    mainHandler.post(() -> ColorRead(port, colorTitle));
+                    break;
                 }
-                break;
-            case "DST":
-                if (parts.length >= 4) {
-                    final String p = parts[2];
+                case "distance": {
                     try {
-                        final int mm = Integer.parseInt(parts[3]);
-                        mainHandler.post(() -> DistanceRead(p, mm));
-                    } catch (NumberFormatException ignored) {}
+                        final int mm = val instanceof Number
+                            ? ((Number) val).intValue()
+                            : Integer.parseInt(val.toString());
+                        mainHandler.post(() -> DistanceRead(port, mm));
+                    } catch (Exception ignored) {}
+                    break;
                 }
-                break;
-            case "PRS":
-                if (parts.length >= 4) {
-                    final String p = parts[2];
+                case "force": {
                     try {
-                        final int value = Integer.parseInt(parts[3]);
-                        mainHandler.post(() -> PressureRead(p, value));
-                    } catch (NumberFormatException ignored) {}
+                        final int value = val instanceof Number
+                            ? ((Number) val).intValue()
+                            : Integer.parseInt(val.toString());
+                        mainHandler.post(() -> PressureRead(port, value));
+                    } catch (Exception ignored) {}
+                    break;
                 }
-                break;
-            case "ISP":
-                if (parts.length >= 4) {
-                    final String p       = parts[2];
-                    final boolean pressed = "1".equals(parts[3]);
-                    mainHandler.post(() -> PressureChecked(p, pressed));
+                case "touched": {
+                    final boolean pressed = val instanceof Boolean
+                        ? (Boolean) val
+                        : "true".equalsIgnoreCase(val != null ? val.toString() : "");
+                    mainHandler.post(() -> PressureChecked(port, pressed));
+                    break;
                 }
-                break;
-            case "TLT":
-                if (parts.length >= 4) {
-                    // Hub echoes back whatever axis string we sent, now title-case
-                    // hub echoes "PITCH" -> "Pitch" (title case matches TiltAxis option block values)
-                    final String rawAx = parts[2];
-                    final String titleAx = rawAx.isEmpty() ? rawAx
-                        : rawAx.substring(0, 1).toUpperCase() + rawAx.substring(1).toLowerCase();
+                case "pitch":
+                case "roll":
+                case "yaw": {
+                    // axis title-case to match TiltAxis option block
+                    final String titleAx = type.substring(0, 1).toUpperCase() + type.substring(1);
                     try {
-                        final int degrees = Integer.parseInt(parts[3]);
+                        final int degrees = val instanceof Number
+                            ? ((Number) val).intValue()
+                            : Integer.parseInt(val.toString());
                         mainHandler.post(() -> TiltAngleRead(titleAx, degrees));
-                    } catch (NumberFormatException ignored) {}
+                    } catch (Exception ignored) {}
+                    break;
                 }
-                break;
-            case "TMR":
-                if (parts.length >= 3) {
-                    try {
-                        final int seconds = Integer.parseInt(parts[2]);
-                        mainHandler.post(() -> TimerRead(seconds));
-                    } catch (NumberFormatException ignored) {}
-                }
-                break;
-            default:
-                break;
-        }
+                default:
+                    break;
+            }
+        } catch (Exception ignored) {}
     }
 
     // =========================================================================
@@ -354,9 +358,9 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
     // =========================================================================
     // Helpers
     // =========================================================================
-    private void sendSensorCommand(String cmd) {
+    private void sendSensorSSP(SSPMessage msg) {
         if (!checkConnected()) return;
-        connectivity.sendCommand(cmd);
+        connectivity.sendSSP(msg);
     }
 
     private boolean checkConnected() {

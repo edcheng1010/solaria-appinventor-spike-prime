@@ -19,8 +19,11 @@ import com.google.appinventor.components.runtime.ComponentContainer;
 import com.google.appinventor.components.runtime.EventDispatcher;
 import com.google.appinventor.components.runtime.util.YailList;
 
+import org.json.JSONObject;
+
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -47,9 +50,10 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
     public static final String RX_CHAR_UUID       = "0000fd02-0001-1000-8000-00805f9b34fb";
     public static final String TX_CHAR_UUID       = "0000fd02-0002-1000-8000-00805f9b34fb";
 
-    private static final int DEFAULT_MAX_PACKET_SIZE = 20;
-    private static final int CHUNK_DELAY_MS          = 100;
-    private static final int CONTROLLER_SLOT         = 0;
+    private static final int    DEFAULT_MAX_PACKET_SIZE = 20;
+    private static final int    CHUNK_DELAY_MS          = 100;
+    private static final int    CONTROLLER_SLOT         = 0;
+    private static final String PREFS_NAME              = "LegoSpikePrefs";
 
     // =========================================================================
     // Hub controller program embedded as a String.
@@ -75,153 +79,718 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
     //   SEN:TMRR         reset timer
     // =========================================================================
     static final String HUB_CONTROLLER_PROGRAM =
-        "from hub import light_matrix, port\n" +
+        "# LEGO SPIKE Prime hub controller — SSP v0.6 edition.\n" +
+        "#\n" +
+        "# Wire format: SSP v0.6 json-utf8-newline over TunnelMessage (opcode 0x32).\n" +
+        "# Each incoming frame is one newline-terminated JSON string.\n" +
+        "# Each outgoing event is one newline-terminated JSON string.\n" +
+        "#\n" +
+        "# This program is the TYPE 2 \"bridge firmware\" for the Solaria platform.\n" +
+        "# It runs entirely on the hub via the Python TunnelMessage facility.\n" +
+        "#\n" +
+        "# See: https://github.com/edcheng1010/solaria-hub/blob/main/spec/SSP-v0.6.md\n" +
+        "\n" +
         "import hub, motor, motor_pair, time\n" +
+        "from hub import light_matrix, port\n" +
+        "\n" +
+        "try:\n" +
+        "    import json\n" +
+        "    _json_ok = True\n" +
+        "except ImportError:\n" +
+        "    _json_ok = False\n" +
+        "\n" +
         "try:\n" +
         "    import color_sensor, distance_sensor, force_sensor, color\n" +
-        "    _clr_map = {}\n" +
-        "    for _n in ('BLACK','RED','GREEN','YELLOW','BLUE','WHITE','CYAN','MAGENTA','ORANGE','VIOLET','AZURE','NONE'):\n" +
-        "        try: _clr_map[getattr(color, _n)] = _n\n" +
-        "        except: pass\n" +
+        "    _CLR_MAP = {}\n" +
+        "    for _n in ('BLACK', 'RED', 'GREEN', 'YELLOW', 'BLUE', 'WHITE',\n" +
+        "               'CYAN', 'MAGENTA', 'ORANGE', 'VIOLET', 'AZURE', 'NONE'):\n" +
+        "        try:\n" +
+        "            _CLR_MAP[getattr(color, _n)] = _n.lower()\n" +
+        "        except AttributeError:\n" +
+        "            pass\n" +
         "    _sensors_ok = True\n" +
-        "except:\n" +
+        "except Exception:\n" +
         "    _sensors_ok = False\n" +
-        "    _clr_map = {}\n" +
-        "tunnel = hub.config['module_tunnel']\n" +
-        "PORTS = {'A': port.A, 'B': port.B, 'C': port.C, 'D': port.D, 'E': port.E, 'F': port.F}\n" +
+        "    _CLR_MAP = {}\n" +
+        "\n" +
+        "# ---------------------------------------------------------------------------\n" +
+        "# Constants\n" +
+        "# ---------------------------------------------------------------------------\n" +
+        "\n" +
+        "PORTS = {'A': port.A, 'B': port.B, 'C': port.C,\n" +
+        "         'D': port.D, 'E': port.E, 'F': port.F}\n" +
+        "\n" +
+        "# Status LED color name → color constant (SSP enum values)\n" +
+        "_LED_COLORS = {\n" +
+        "    'red': color.RED if hasattr(color, 'RED') else 9,\n" +
+        "    'orange': color.ORANGE if hasattr(color, 'ORANGE') else 7,\n" +
+        "    'yellow': color.YELLOW if hasattr(color, 'YELLOW') else 6,\n" +
+        "    'green': color.GREEN if hasattr(color, 'GREEN') else 5,\n" +
+        "    'cyan': color.CYAN if hasattr(color, 'CYAN') else 10,\n" +
+        "    'blue': color.BLUE if hasattr(color, 'BLUE') else 3,\n" +
+        "    'violet': color.VIOLET if hasattr(color, 'VIOLET') else 11,\n" +
+        "    'magenta': color.MAGENTA if hasattr(color, 'MAGENTA') else 8,\n" +
+        "    'white': color.WHITE if hasattr(color, 'WHITE') else 10,\n" +
+        "    'off': 0,\n" +
+        "}\n" +
+        "\n" +
+        "# Image name → light_matrix constant\n" +
         "_IMG_CONST = {\n" +
-        "    'HEART':'IMAGE_HEART','HEARTSMALL':'IMAGE_HEART_SMALL',\n" +
-        "    'HAPPY':'IMAGE_HAPPY','SMILE':'IMAGE_SMILE','SAD':'IMAGE_SAD',\n" +
-        "    'CONFUSED':'IMAGE_CONFUSED','ANGRY':'IMAGE_ANGRY','ASLEEP':'IMAGE_ASLEEP',\n" +
-        "    'SURPRISED':'IMAGE_SURPRISED','YES':'IMAGE_YES','NO':'IMAGE_NO',\n" +
-        "    'ARROWNORTH':'IMAGE_ARROW_N','ARROWEAST':'IMAGE_ARROW_E',\n" +
-        "    'ARROWSOUTH':'IMAGE_ARROW_S','ARROWWEST':'IMAGE_ARROW_W'}\n" +
-        "IMAGES = {'HEART':0,'HEART_SMALL':1,'HEARTSMALL':1,\n" +
-        "          'HAPPY':2,'SMILE':3,'SAD':4,'CONFUSED':5,'ANGRY':6,'ASLEEP':7,\n" +
-        "          'SURPRISED':8,'YES':12,'NO':13,\n" +
-        "          'ARROW_N':16,'ARROWNORTH':16,'ARROW_E':18,'ARROWEAST':18,\n" +
-        "          'ARROW_S':20,'ARROWSOUTH':20,'ARROW_W':22,'ARROWWEST':22}\n" +
+        "    'HEART': 'IMAGE_HEART', 'HEARTSMALL': 'IMAGE_HEART_SMALL',\n" +
+        "    'HAPPY': 'IMAGE_HAPPY', 'SMILE': 'IMAGE_SMILE', 'SAD': 'IMAGE_SAD',\n" +
+        "    'CONFUSED': 'IMAGE_CONFUSED', 'ANGRY': 'IMAGE_ANGRY',\n" +
+        "    'ASLEEP': 'IMAGE_ASLEEP', 'SURPRISED': 'IMAGE_SURPRISED',\n" +
+        "    'YES': 'IMAGE_YES', 'NO': 'IMAGE_NO',\n" +
+        "    'ARROWNORTH': 'IMAGE_ARROW_N', 'ARROWEAST': 'IMAGE_ARROW_E',\n" +
+        "    'ARROWSOUTH': 'IMAGE_ARROW_S', 'ARROWWEST': 'IMAGE_ARROW_W',\n" +
+        "}\n" +
+        "_IMAGES_IDX = {\n" +
+        "    'HEART': 0, 'HEARTSMALL': 1, 'HAPPY': 2, 'SMILE': 3, 'SAD': 4,\n" +
+        "    'CONFUSED': 5, 'ANGRY': 6, 'ASLEEP': 7, 'SURPRISED': 8,\n" +
+        "    'YES': 12, 'NO': 13, 'ARROWNORTH': 16, 'ARROWEAST': 18,\n" +
+        "    'ARROWSOUTH': 20, 'ARROWWEST': 22,\n" +
+        "}\n" +
+        "\n" +
+        "# ---------------------------------------------------------------------------\n" +
+        "# State\n" +
+        "# ---------------------------------------------------------------------------\n" +
+        "\n" +
         "_timer_start = time.ticks_ms()\n" +
-        "_mov_lp = None\n" +
+        "_mov_lp = None          # cached motor_pair left port (skip re-pair when same)\n" +
         "_mov_rp = None\n" +
-        "def on_message(data):\n" +
-        "    global _timer_start, _mov_lp, _mov_rp\n" +
-        "    if not isinstance(data, str):\n" +
-        "        data = ''.join(chr(b) for b in data)\n" +
-        "    parts = data.split(':')\n" +
-        "    resp = b'rdy'\n" +
+        "\n" +
+        "# Subscriptions: port_id -> {type, mode, interval_ms, min_change, last_ms, last_val}\n" +
+        "# Special port 'battery'/'temperature'/etc. are system metrics.\n" +
+        "_subscriptions = {}\n" +
+        "_sys_subscriptions = {}  # metric -> {interval_ms, last_ms, last_val}\n" +
+        "\n" +
+        "_last_ping_ms = None     # None = heartbeat not yet started\n" +
+        "_heartbeat_active = False\n" +
+        "\n" +
+        "# ---------------------------------------------------------------------------\n" +
+        "# Tunnel setup\n" +
+        "# ---------------------------------------------------------------------------\n" +
+        "\n" +
+        "tunnel = hub.config['module_tunnel']\n" +
+        "\n" +
+        "\n" +
+        "# ---------------------------------------------------------------------------\n" +
+        "# Helpers\n" +
+        "# ---------------------------------------------------------------------------\n" +
+        "\n" +
+        "def _send(obj):\n" +
+        "    \"\"\"Send a JSON event to the client.\"\"\"\n" +
         "    try:\n" +
-        "        cmd = parts[0]\n" +
-        "        if cmd == 'MTR' and len(parts) >= 3:\n" +
-        "            p = parts[1].upper()\n" +
-        "            act = parts[2].upper()\n" +
-        "            if p in PORTS:\n" +
-        "                if act == 'STOP':\n" +
-        "                    motor.stop(PORTS[p])\n" +
-        "                elif act in ('CW', 'CCW') and len(parts) >= 4:\n" +
-        "                    spd = int(parts[3]) * 11\n" +
-        "                    if act == 'CCW': spd = -spd\n" +
-        "                    motor.run(PORTS[p], spd)\n" +
-        "        elif cmd == 'MOV' and len(parts) >= 2:\n" +
-        "            sub = parts[1].upper()\n" +
-        "            if sub == 'FWD' and len(parts) >= 5:\n" +
-        "                lp,rp = parts[2].upper(),parts[3].upper()\n" +
-        "                if lp in PORTS and rp in PORTS:\n" +
-        "                    if lp!=_mov_lp or rp!=_mov_rp:\n" +
-        "                        motor_pair.pair(motor_pair.PAIR_1,PORTS[lp],PORTS[rp])\n" +
-        "                        _mov_lp,_mov_rp=lp,rp\n" +
-        "                    motor_pair.move(motor_pair.PAIR_1,0,velocity=int(parts[4])*11)\n" +
-        "            elif sub == 'BWD' and len(parts) >= 5:\n" +
-        "                lp,rp = parts[2].upper(),parts[3].upper()\n" +
-        "                if lp in PORTS and rp in PORTS:\n" +
-        "                    if lp!=_mov_lp or rp!=_mov_rp:\n" +
-        "                        motor_pair.pair(motor_pair.PAIR_1,PORTS[lp],PORTS[rp])\n" +
-        "                        _mov_lp,_mov_rp=lp,rp\n" +
-        "                    motor_pair.move(motor_pair.PAIR_1,0,velocity=-(int(parts[4])*11))\n" +
-        "            elif sub == 'STEER' and len(parts) >= 6:\n" +
-        "                lp,rp = parts[2].upper(),parts[3].upper()\n" +
-        "                if lp in PORTS and rp in PORTS:\n" +
-        "                    if lp!=_mov_lp or rp!=_mov_rp:\n" +
-        "                        motor_pair.pair(motor_pair.PAIR_1,PORTS[lp],PORTS[rp])\n" +
-        "                        _mov_lp,_mov_rp=lp,rp\n" +
-        "                    motor_pair.move(motor_pair.PAIR_1,int(parts[4]),velocity=int(parts[5])*11)\n" +
-        "            elif sub == 'STOP':\n" +
-        "                if len(parts)>=4:\n" +
-        "                    lp,rp=parts[2].upper(),parts[3].upper()\n" +
-        "                    if lp in PORTS and rp in PORTS:\n" +
-        "                        if lp!=_mov_lp or rp!=_mov_rp:\n" +
-        "                            motor_pair.pair(motor_pair.PAIR_1,PORTS[lp],PORTS[rp])\n" +
-        "                            _mov_lp,_mov_rp=lp,rp\n" +
-        "                motor_pair.stop(motor_pair.PAIR_1)\n" +
-        "        elif cmd == 'LGT' and len(parts) >= 2:\n" +
-        "            sub = parts[1].upper()\n" +
-        "            if sub == 'ON' and len(parts) >= 3:\n" +
-        "                _n = parts[2].upper()\n" +
-        "                _const = _IMG_CONST.get(_n)\n" +
-        "                if _const:\n" +
-        "                    try: _img = getattr(light_matrix, _const)\n" +
-        "                    except AttributeError: _img = IMAGES.get(_n, 2)\n" +
+        "        tunnel.send((json.dumps(obj) + '\\n').encode())\n" +
+        "    except Exception:\n" +
+        "        pass\n" +
+        "\n" +
+        "\n" +
+        "def _send_error(code, message, request_id=None):\n" +
+        "    err = {'event': 'error', 'code': code, 'message': message}\n" +
+        "    if request_id is not None:\n" +
+        "        err['request_id'] = request_id\n" +
+        "    _send(err)\n" +
+        "\n" +
+        "\n" +
+        "def _sensor_event(port_id, sensor_type, value, request_id=None):\n" +
+        "    ev = {'event': 'sensor', 'port': port_id, 'type': sensor_type, 'value': value}\n" +
+        "    if request_id is not None:\n" +
+        "        ev['request_id'] = request_id\n" +
+        "    _send(ev)\n" +
+        "\n" +
+        "\n" +
+        "def _system_event(metric, value):\n" +
+        "    _send({'event': 'system', 'metric': metric, 'value': value})\n" +
+        "\n" +
+        "\n" +
+        "def _tilt_angles():\n" +
+        "    \"\"\"Returns (pitch, roll, yaw) in degrees (integer), or (0, 0, 0) on error.\"\"\"\n" +
+        "    try:\n" +
+        "        try:\n" +
+        "            raw = hub.motion_sensor.tilt_angles()\n" +
+        "        except AttributeError:\n" +
+        "            raw = hub.imu.tilt_angles()\n" +
+        "        return (raw[0] // 10, raw[1] // 10, raw[2] // 10)\n" +
+        "    except Exception:\n" +
+        "        return (0, 0, 0)\n" +
+        "\n" +
+        "\n" +
+        "def _ensure_pair(lp, rp):\n" +
+        "    \"\"\"Re-pair motor pair only when ports change.\"\"\"\n" +
+        "    global _mov_lp, _mov_rp\n" +
+        "    if lp != _mov_lp or rp != _mov_rp:\n" +
+        "        try:\n" +
+        "            motor_pair.pair(motor_pair.PAIR_1, PORTS[lp], PORTS[rp])\n" +
+        "        except Exception:\n" +
+        "            pass\n" +
+        "        _mov_lp, _mov_rp = lp, rp\n" +
+        "\n" +
+        "\n" +
+        "def _show_image(name):\n" +
+        "    n = name.upper()\n" +
+        "    const = _IMG_CONST.get(n)\n" +
+        "    if const is not None:\n" +
+        "        try:\n" +
+        "            img = getattr(light_matrix, const)\n" +
+        "            light_matrix.show_image(img)\n" +
+        "            return\n" +
+        "        except AttributeError:\n" +
+        "            pass\n" +
+        "    idx = _IMAGES_IDX.get(n, 2)\n" +
+        "    light_matrix.show_image(idx)\n" +
+        "\n" +
+        "\n" +
+        "def _read_sensor_value(port_id, sensor_type):\n" +
+        "    \"\"\"Reads a sensor value. Returns None on error.\"\"\"\n" +
+        "    p = PORTS.get(port_id.upper())\n" +
+        "    if p is None or not _sensors_ok:\n" +
+        "        return None\n" +
+        "    try:\n" +
+        "        if sensor_type == 'color':\n" +
+        "            c = color_sensor.color(p)\n" +
+        "            return _CLR_MAP.get(c, str(c))\n" +
+        "        elif sensor_type == 'reflected':\n" +
+        "            return color_sensor.reflection(p)\n" +
+        "        elif sensor_type == 'ambient':\n" +
+        "            return color_sensor.ambient_light(p)\n" +
+        "        elif sensor_type == 'distance':\n" +
+        "            return distance_sensor.distance(p)\n" +
+        "        elif sensor_type == 'force':\n" +
+        "            return force_sensor.force(p)\n" +
+        "        elif sensor_type == 'touched':\n" +
+        "            return force_sensor.pressed(p)\n" +
+        "        elif sensor_type == 'pitch':\n" +
+        "            return _tilt_angles()[0]\n" +
+        "        elif sensor_type == 'roll':\n" +
+        "            return _tilt_angles()[1]\n" +
+        "        elif sensor_type == 'yaw':\n" +
+        "            return _tilt_angles()[2]\n" +
+        "    except Exception:\n" +
+        "        return None\n" +
+        "\n" +
+        "\n" +
+        "def _read_system_metric(metric):\n" +
+        "    \"\"\"Reads a system metric value. Returns None on error.\"\"\"\n" +
+        "    try:\n" +
+        "        if metric == 'battery':\n" +
+        "            try:\n" +
+        "                return hub.battery.level()\n" +
+        "            except AttributeError:\n" +
+        "                return hub.battery.voltage() // 40  # rough % from mV\n" +
+        "        elif metric == 'temperature':\n" +
+        "            try:\n" +
+        "                return hub.temperature()\n" +
+        "            except AttributeError:\n" +
+        "                return None\n" +
+        "        elif metric == 'charging':\n" +
+        "            try:\n" +
+        "                return hub.battery.charger_detect()\n" +
+        "            except AttributeError:\n" +
+        "                return False\n" +
+        "        elif metric == 'connection_rssi':\n" +
+        "            return None  # not accessible from Python\n" +
+        "    except Exception:\n" +
+        "        return None\n" +
+        "    return None\n" +
+        "\n" +
+        "\n" +
+        "# ---------------------------------------------------------------------------\n" +
+        "# Capability declaration\n" +
+        "# ---------------------------------------------------------------------------\n" +
+        "\n" +
+        "def _build_capability():\n" +
+        "    ports_list = []\n" +
+        "\n" +
+        "    # Motor ports: try each port; include as motor if present\n" +
+        "    for pid in ('A', 'B', 'C', 'D', 'E', 'F'):\n" +
+        "        try:\n" +
+        "            p = PORTS[pid]\n" +
+        "            # probe: if port.device is None, nothing connected\n" +
+        "            device = getattr(p, 'device', None)\n" +
+        "            if device is None:\n" +
+        "                continue\n" +
+        "            ports_list.append({\n" +
+        "                'id': pid,\n" +
+        "                'type': 'motor',\n" +
+        "                'features': ['speed', 'position', 'stall'],\n" +
+        "                'constraints': {\n" +
+        "                    'speed':    {'type': 'int', 'min': -100, 'max': 100},\n" +
+        "                    'position': {'type': 'int', 'min': 0, 'max': 359, 'wraps': True},\n" +
+        "                },\n" +
+        "            })\n" +
+        "        except Exception:\n" +
+        "            pass\n" +
+        "\n" +
+        "    # Display port (always present)\n" +
+        "    ports_list.append({\n" +
+        "        'id': 'display',\n" +
+        "        'type': 'display',\n" +
+        "        'width': 5, 'height': 5, 'depth': 'grayscale',\n" +
+        "        'features': ['pixel', 'image', 'text', 'brightness', 'orientation'],\n" +
+        "    })\n" +
+        "\n" +
+        "    # Status LED (always present)\n" +
+        "    ports_list.append({\n" +
+        "        'id': 'status',\n" +
+        "        'type': 'led',\n" +
+        "        'features': ['set'],\n" +
+        "        'constraints': {\n" +
+        "            'color': {\n" +
+        "                'type': 'enum',\n" +
+        "                'values': list(_LED_COLORS.keys()),\n" +
+        "            },\n" +
+        "        },\n" +
+        "    })\n" +
+        "\n" +
+        "    # IMU (always present on SPIKE Prime 3.x)\n" +
+        "    ports_list.append({\n" +
+        "        'id': 'imu',\n" +
+        "        'type': 'orientation',\n" +
+        "        'features': ['pitch', 'roll', 'yaw', 'gesture'],\n" +
+        "        'constraints': {\n" +
+        "            'gesture': {\n" +
+        "                'type': 'enum',\n" +
+        "                'values': ['shake', 'tap', 'double_tap', 'fall', 'face_up', 'face_down'],\n" +
+        "            },\n" +
+        "        },\n" +
+        "    })\n" +
+        "\n" +
+        "    # Speaker\n" +
+        "    ports_list.append({\n" +
+        "        'id': 'speaker',\n" +
+        "        'type': 'speaker',\n" +
+        "        'features': ['beep'],\n" +
+        "    })\n" +
+        "\n" +
+        "    return {\n" +
+        "        'type': 'capability',\n" +
+        "        'device': 'spike-prime',\n" +
+        "        'firmware': '3.x',\n" +
+        "        'ssp_version': '0.6',\n" +
+        "        'encodings': ['json-utf8-newline'],\n" +
+        "        'supports_batch': False,\n" +
+        "        'system_metrics': [\n" +
+        "            'battery', 'charging', 'temperature',\n" +
+        "            'button.left', 'button.right', 'button.center',\n" +
+        "        ],\n" +
+        "        'ports': ports_list,\n" +
+        "    }\n" +
+        "\n" +
+        "\n" +
+        "# ---------------------------------------------------------------------------\n" +
+        "# Command handlers\n" +
+        "# ---------------------------------------------------------------------------\n" +
+        "\n" +
+        "def _handle_motor(cmd, obj, req_id):\n" +
+        "    action = cmd.split('.')[1]  # run, stop, goto, reset\n" +
+        "    port_id = obj.get('port', '').upper()\n" +
+        "    p = PORTS.get(port_id)\n" +
+        "    if p is None:\n" +
+        "        _send_error(201, 'Unknown port: ' + port_id, req_id)\n" +
+        "        return\n" +
+        "\n" +
+        "    try:\n" +
+        "        if action == 'run':\n" +
+        "            spd = int(obj.get('speed', 0)) * 11\n" +
+        "            dur = obj.get('duration')\n" +
+        "            unit = obj.get('duration_unit', 'ms')\n" +
+        "            if dur is not None:\n" +
+        "                dur = int(dur)\n" +
+        "                if unit == 'ms':\n" +
+        "                    motor.run_for_time(p, dur, spd)\n" +
+        "                elif unit == 'degrees':\n" +
+        "                    motor.run_for_degrees(p, dur, spd)\n" +
+        "                elif unit == 'rotations':\n" +
+        "                    motor.run_for_degrees(p, dur * 360, spd)\n" +
+        "            else:\n" +
+        "                motor.run(p, spd)\n" +
+        "\n" +
+        "        elif action == 'stop':\n" +
+        "            stop_action = obj.get('stop_action', 'brake')\n" +
+        "            if stop_action == 'coast':\n" +
+        "                motor.stop(p, stop=motor.COAST)\n" +
+        "            elif stop_action == 'hold':\n" +
+        "                motor.stop(p, stop=motor.HOLD)\n" +
+        "            else:\n" +
+        "                motor.stop(p)\n" +
+        "\n" +
+        "        elif action == 'goto':\n" +
+        "            pos = int(obj.get('position', 0))\n" +
+        "            spd = int(obj.get('speed', 50)) * 11\n" +
+        "            motor.run_to_position(p, pos, spd)\n" +
+        "\n" +
+        "        elif action == 'reset':\n" +
+        "            motor.reset_relative_position(p, 0)\n" +
+        "\n" +
+        "    except Exception as e:\n" +
+        "        _send_error(301, 'Motor error: ' + str(e), req_id)\n" +
+        "\n" +
+        "\n" +
+        "def _handle_movement(cmd, obj, req_id):\n" +
+        "    action = cmd.split('.')[1]  # configure, drive, turn, stop\n" +
+        "\n" +
+        "    try:\n" +
+        "        if action == 'configure':\n" +
+        "            lp = obj.get('left', '').upper()\n" +
+        "            rp = obj.get('right', '').upper()\n" +
+        "            if lp in PORTS and rp in PORTS:\n" +
+        "                _ensure_pair(lp, rp)\n" +
+        "\n" +
+        "        elif action == 'drive':\n" +
+        "            lp = obj.get('left', _mov_lp or 'A').upper()\n" +
+        "            rp = obj.get('right', _mov_rp or 'B').upper()\n" +
+        "            if lp in PORTS and rp in PORTS:\n" +
+        "                _ensure_pair(lp, rp)\n" +
+        "            steering = int(obj.get('steering', 0))\n" +
+        "            vel = int(obj.get('speed', 50)) * 11\n" +
+        "            dur = obj.get('duration')\n" +
+        "            unit = obj.get('duration_unit', 'ms')\n" +
+        "            if dur is not None:\n" +
+        "                dur = int(dur)\n" +
+        "                if unit == 'degrees':\n" +
+        "                    motor_pair.move_for_degrees(motor_pair.PAIR_1, dur, steering, velocity=vel)\n" +
+        "                elif unit == 'rotations':\n" +
+        "                    motor_pair.move_for_degrees(motor_pair.PAIR_1, dur * 360, steering, velocity=vel)\n" +
         "                else:\n" +
-        "                    _img = IMAGES.get(_n, 2)\n" +
-        "                light_matrix.show_image(_img)\n" +
-        "            elif sub == 'OFF':\n" +
+        "                    motor_pair.move_for_time(motor_pair.PAIR_1, dur, steering, velocity=vel)\n" +
+        "            else:\n" +
+        "                motor_pair.move(motor_pair.PAIR_1, steering, velocity=vel)\n" +
+        "\n" +
+        "        elif action == 'turn':\n" +
+        "            angle = int(obj.get('angle', 90))\n" +
+        "            vel = int(obj.get('speed', 50)) * 11\n" +
+        "            motor_pair.move_for_degrees(motor_pair.PAIR_1, angle, 0, velocity=vel)\n" +
+        "\n" +
+        "        elif action == 'stop':\n" +
+        "            stop_action = obj.get('stop_action', 'brake')\n" +
+        "            if stop_action == 'coast':\n" +
+        "                motor_pair.stop(motor_pair.PAIR_1, stop=motor_pair.COAST)\n" +
+        "            else:\n" +
+        "                motor_pair.stop(motor_pair.PAIR_1)\n" +
+        "\n" +
+        "    except Exception as e:\n" +
+        "        _send_error(301, 'Movement error: ' + str(e), req_id)\n" +
+        "\n" +
+        "\n" +
+        "def _handle_led(cmd, obj, req_id):\n" +
+        "    parts = cmd.split('.')  # ['led', ...] or ['led', 'matrix', 'pixel']\n" +
+        "    if len(parts) == 2:\n" +
+        "        action = parts[1]  # set, off\n" +
+        "        port_id = obj.get('port', '')\n" +
+        "        if port_id == 'status':\n" +
+        "            if action == 'set':\n" +
+        "                color_name = str(obj.get('color', 'off')).lower()\n" +
+        "                c = _LED_COLORS.get(color_name, 0)\n" +
+        "                try:\n" +
+        "                    hub.light.color(c)\n" +
+        "                except Exception:\n" +
+        "                    pass\n" +
+        "            elif action == 'off':\n" +
+        "                try:\n" +
+        "                    hub.light.color(0)\n" +
+        "                except Exception:\n" +
+        "                    pass\n" +
+        "    elif len(parts) >= 3 and parts[1] == 'matrix':\n" +
+        "        action = parts[2]  # pixel, image, text, clear, brightness, orientation\n" +
+        "        try:\n" +
+        "            if action == 'pixel':\n" +
+        "                x = int(obj.get('x', 0))\n" +
+        "                y = int(obj.get('y', 0))\n" +
+        "                brightness = int(obj.get('brightness', 100))\n" +
+        "                light_matrix.set_pixel(x, y, brightness)\n" +
+        "\n" +
+        "            elif action == 'image':\n" +
+        "                _show_image(str(obj.get('image', 'HAPPY')))\n" +
+        "\n" +
+        "            elif action == 'text':\n" +
+        "                text = str(obj.get('text', ''))\n" +
+        "                light_matrix.write(text)\n" +
+        "\n" +
+        "            elif action == 'clear':\n" +
         "                for _x in range(5):\n" +
         "                    for _y in range(5):\n" +
         "                        light_matrix.set_pixel(_x, _y, 0)\n" +
-        "            elif sub == 'TXT' and len(parts) >= 3:\n" +
-        "                light_matrix.write(':'.join(parts[2:]))\n" +
-        "            elif sub == 'PIX' and len(parts) >= 5:\n" +
-        "                light_matrix.set_pixel(int(parts[2]), int(parts[3]), int(parts[4]))\n" +
-        "        elif cmd == 'SEN' and len(parts) >= 2 and _sensors_ok:\n" +
-        "            sub = parts[1].upper()\n" +
-        "            if sub == 'CLR' and len(parts) >= 3:\n" +
-        "                p = parts[2].upper()\n" +
-        "                if p in PORTS:\n" +
-        "                    try:\n" +
-        "                        c = color_sensor.color(PORTS[p])\n" +
-        "                        resp = ('SEN:CLR:' + p + ':' + _clr_map.get(c, str(c))).encode()\n" +
-        "                    except: resp = ('SEN:CLR:' + p + ':NONE').encode()\n" +
-        "            elif sub == 'DST' and len(parts) >= 3:\n" +
-        "                p = parts[2].upper()\n" +
-        "                if p in PORTS:\n" +
-        "                    try:\n" +
-        "                        resp = ('SEN:DST:' + p + ':' + str(distance_sensor.distance(PORTS[p]))).encode()\n" +
-        "                    except: resp = ('SEN:DST:' + p + ':-1').encode()\n" +
-        "            elif sub == 'PRS' and len(parts) >= 3:\n" +
-        "                p = parts[2].upper()\n" +
-        "                if p in PORTS:\n" +
-        "                    try:\n" +
-        "                        resp = ('SEN:PRS:' + p + ':' + str(force_sensor.force(PORTS[p]))).encode()\n" +
-        "                    except: resp = ('SEN:PRS:' + p + ':0').encode()\n" +
-        "            elif sub == 'ISP' and len(parts) >= 3:\n" +
-        "                p = parts[2].upper()\n" +
-        "                if p in PORTS:\n" +
-        "                    try:\n" +
-        "                        resp = ('SEN:ISP:' + p + ':' + ('1' if force_sensor.pressed(PORTS[p]) else '0')).encode()\n" +
-        "                    except: resp = ('SEN:ISP:' + p + ':0').encode()\n" +
-        "            elif sub == 'TLT' and len(parts) >= 3:\n" +
-        "                axis = parts[2].upper()\n" +
+        "\n" +
+        "            elif action == 'brightness':\n" +
+        "                # No global brightness API; scale future pixel writes instead\n" +
+        "                pass\n" +
+        "\n" +
+        "            elif action == 'orientation':\n" +
+        "                rotation = int(obj.get('rotation', 0))\n" +
         "                try:\n" +
+        "                    hub.light_matrix.set_orientation(rotation)\n" +
+        "                except Exception:\n" +
+        "                    pass\n" +
+        "\n" +
+        "        except Exception as e:\n" +
+        "            _send_error(301, 'LED error: ' + str(e), req_id)\n" +
+        "\n" +
+        "\n" +
+        "def _handle_sound(cmd, obj, req_id):\n" +
+        "    action = cmd.split('.')[1]  # beep, play, stop, set_volume\n" +
+        "    try:\n" +
+        "        if action == 'beep':\n" +
+        "            freq = int(obj.get('freq', 440))\n" +
+        "            dur = int(obj.get('duration', 200))\n" +
+        "            hub.sound.beep(freq, dur)\n" +
+        "        elif action == 'stop':\n" +
+        "            hub.sound.stop()\n" +
+        "        elif action == 'play':\n" +
+        "            sound_name = obj.get('sound')\n" +
+        "            if sound_name:\n" +
+        "                hub.sound.play(str(sound_name))\n" +
+        "        elif action == 'set_volume':\n" +
+        "            level = int(obj.get('level', 50))\n" +
+        "            try:\n" +
+        "                hub.sound.set_volume(level)\n" +
+        "            except AttributeError:\n" +
+        "                pass\n" +
+        "    except Exception as e:\n" +
+        "        _send_error(301, 'Sound error: ' + str(e), req_id)\n" +
+        "\n" +
+        "\n" +
+        "def _handle_sensor(cmd, obj, req_id):\n" +
+        "    action = cmd.split('.')[1]  # subscribe, unsubscribe, read\n" +
+        "    port_id = obj.get('port', '')\n" +
+        "\n" +
+        "    if action == 'subscribe':\n" +
+        "        mode = obj.get('mode', 'interval')\n" +
+        "        interval_ms = int(obj.get('interval', 100))\n" +
+        "        min_change = obj.get('min_change', None)\n" +
+        "        # Determine sensor type from port capabilities (simplistic)\n" +
+        "        if port_id == 'imu':\n" +
+        "            sensor_type = obj.get('type', 'pitch')\n" +
+        "        else:\n" +
+        "            sensor_type = obj.get('type', 'color')\n" +
+        "        _subscriptions[port_id] = {\n" +
+        "            'type': sensor_type,\n" +
+        "            'mode': mode,\n" +
+        "            'interval_ms': interval_ms,\n" +
+        "            'min_change': float(min_change) if min_change is not None else None,\n" +
+        "            'last_ms': 0,\n" +
+        "            'last_val': None,\n" +
+        "        }\n" +
+        "\n" +
+        "    elif action == 'unsubscribe':\n" +
+        "        _subscriptions.pop(port_id, None)\n" +
+        "\n" +
+        "    elif action == 'read':\n" +
+        "        sensor_type = obj.get('type', 'color')\n" +
+        "        if port_id == 'imu':\n" +
+        "            angles = _tilt_angles()\n" +
+        "            if sensor_type == 'pitch':\n" +
+        "                _sensor_event(port_id, 'pitch', angles[0], req_id)\n" +
+        "            elif sensor_type == 'roll':\n" +
+        "                _sensor_event(port_id, 'roll', angles[1], req_id)\n" +
+        "            elif sensor_type == 'yaw':\n" +
+        "                _sensor_event(port_id, 'yaw', angles[2], req_id)\n" +
+        "        else:\n" +
+        "            val = _read_sensor_value(port_id, sensor_type)\n" +
+        "            if val is not None:\n" +
+        "                _sensor_event(port_id, sensor_type, val, req_id)\n" +
+        "\n" +
+        "\n" +
+        "def _handle_system(cmd, obj, req_id):\n" +
+        "    global _last_ping_ms, _heartbeat_active\n" +
+        "    action = cmd.split('.')[1]  # ping, info, subscribe, unsubscribe, read, reset\n" +
+        "\n" +
+        "    if action == 'ping':\n" +
+        "        _last_ping_ms = time.ticks_ms()\n" +
+        "        _heartbeat_active = True\n" +
+        "        _send({'event': 'pong'})\n" +
+        "\n" +
+        "    elif action == 'info':\n" +
+        "        _send({\n" +
+        "            'event': 'system_info',\n" +
+        "            'device': 'spike-prime',\n" +
+        "            'ssp_version': '0.6',\n" +
+        "        })\n" +
+        "\n" +
+        "    elif action == 'subscribe':\n" +
+        "        metric = obj.get('metric', '')\n" +
+        "        interval_ms = int(obj.get('interval', 5000))\n" +
+        "        _sys_subscriptions[metric] = {\n" +
+        "            'interval_ms': interval_ms,\n" +
+        "            'last_ms': 0,\n" +
+        "            'last_val': None,\n" +
+        "        }\n" +
+        "\n" +
+        "    elif action == 'unsubscribe':\n" +
+        "        _sys_subscriptions.pop(obj.get('metric', ''), None)\n" +
+        "\n" +
+        "    elif action == 'read':\n" +
+        "        metric = obj.get('metric', '')\n" +
+        "        if metric.startswith('button.'):\n" +
+        "            btn_name = metric.split('.')[1]\n" +
+        "            try:\n" +
+        "                state = _read_button(btn_name)\n" +
+        "                _system_event(metric, state)\n" +
+        "            except Exception:\n" +
+        "                pass\n" +
+        "        else:\n" +
+        "            val = _read_system_metric(metric)\n" +
+        "            if val is not None:\n" +
+        "                _system_event(metric, val)\n" +
+        "\n" +
+        "    elif action == 'reset':\n" +
+        "        pass  # no-op on this platform\n" +
+        "\n" +
+        "\n" +
+        "def _read_button(name):\n" +
+        "    \"\"\"Read button state. Returns 'pressed' or 'released'.\"\"\"\n" +
+        "    try:\n" +
+        "        if name == 'left':\n" +
+        "            return 'pressed' if hub.button.left.is_pressed() else 'released'\n" +
+        "        elif name == 'right':\n" +
+        "            return 'pressed' if hub.button.right.is_pressed() else 'released'\n" +
+        "        elif name == 'center':\n" +
+        "            return 'pressed' if hub.button.center.is_pressed() else 'released'\n" +
+        "    except AttributeError:\n" +
+        "        # Fallback for firmwares that use hub.port button API\n" +
+        "        pass\n" +
+        "    return 'released'\n" +
+        "\n" +
+        "\n" +
+        "# ---------------------------------------------------------------------------\n" +
+        "# Message callback\n" +
+        "# ---------------------------------------------------------------------------\n" +
+        "\n" +
+        "def on_message(data):\n" +
+        "    if not _json_ok:\n" +
+        "        tunnel.send(b'{\"event\":\"error\",\"code\":400,\"message\":\"json not available\"}\\n')\n" +
+        "        return\n" +
+        "\n" +
+        "    if not isinstance(data, str):\n" +
+        "        try:\n" +
+        "            data = data.decode('utf-8')\n" +
+        "        except Exception:\n" +
+        "            data = ''.join(chr(b) for b in data)\n" +
+        "\n" +
+        "    try:\n" +
+        "        obj = json.loads(data.strip())\n" +
+        "    except Exception:\n" +
+        "        _send_error(400, 'Malformed JSON')\n" +
+        "        return\n" +
+        "\n" +
+        "    cmd = obj.get('cmd', '')\n" +
+        "    req_id = obj.get('request_id', None)\n" +
+        "\n" +
+        "    try:\n" +
+        "        if cmd.startswith('motor.'):\n" +
+        "            _handle_motor(cmd, obj, req_id)\n" +
+        "        elif cmd.startswith('movement.'):\n" +
+        "            _handle_movement(cmd, obj, req_id)\n" +
+        "        elif cmd.startswith('led.'):\n" +
+        "            _handle_led(cmd, obj, req_id)\n" +
+        "        elif cmd.startswith('sound.'):\n" +
+        "            _handle_sound(cmd, obj, req_id)\n" +
+        "        elif cmd.startswith('sensor.'):\n" +
+        "            _handle_sensor(cmd, obj, req_id)\n" +
+        "        elif cmd.startswith('system.'):\n" +
+        "            _handle_system(cmd, obj, req_id)\n" +
+        "        else:\n" +
+        "            _send_error(400, 'Unknown command: ' + cmd, req_id)\n" +
+        "    except Exception as e:\n" +
+        "        _send_error(400, 'Handler error: ' + str(e), req_id)\n" +
+        "\n" +
+        "\n" +
+        "# ---------------------------------------------------------------------------\n" +
+        "# Startup\n" +
+        "# ---------------------------------------------------------------------------\n" +
+        "\n" +
+        "def start():\n" +
+        "    \"\"\"Entry point — called when running on the SPIKE Prime hub.\"\"\"\n" +
+        "    tunnel.callback(on_message)\n" +
+        "    _send(_build_capability())\n" +
+        "    _run_loop()\n" +
+        "\n" +
+        "\n" +
+        "def _run_loop():\n" +
+        "    \"\"\"Main polling loop — subscriptions and heartbeat.\"\"\"\n" +
+        "    global _heartbeat_active\n" +
+        "    while True:\n" +
+        "        now = time.ticks_ms()\n" +
+        "\n" +
+        "        # Heartbeat: stop emitting if client stops pinging for 10 s\n" +
+        "        if _heartbeat_active and _last_ping_ms is not None:\n" +
+        "            if time.ticks_diff(now, _last_ping_ms) > 10000:\n" +
+        "                _heartbeat_active = False\n" +
+        "                _subscriptions.clear()\n" +
+        "                _sys_subscriptions.clear()\n" +
+        "\n" +
+        "        # Sensor subscriptions\n" +
+        "        for pid, sub in list(_subscriptions.items()):\n" +
+        "            elapsed = time.ticks_diff(now, sub['last_ms'])\n" +
+        "            if elapsed < sub['interval_ms']:\n" +
+        "                continue\n" +
+        "\n" +
+        "            stype = sub['type']\n" +
+        "            if pid == 'imu':\n" +
+        "                angles = _tilt_angles()\n" +
+        "                val = {'pitch': angles[0], 'roll': angles[1], 'yaw': angles[2]}.get(stype, 0)\n" +
+        "            else:\n" +
+        "                val = _read_sensor_value(pid, stype)\n" +
+        "\n" +
+        "            if val is None:\n" +
+        "                continue\n" +
+        "\n" +
+        "            mode = sub['mode']\n" +
+        "            last_val = sub['last_val']\n" +
+        "            min_change = sub['min_change']\n" +
+        "\n" +
+        "            should_emit = False\n" +
+        "            if mode == 'interval':\n" +
+        "                should_emit = True\n" +
+        "            elif mode in ('on_change', 'hybrid'):\n" +
+        "                if last_val is None:\n" +
+        "                    should_emit = True\n" +
+        "                elif min_change is not None:\n" +
         "                    try:\n" +
-        "                        angles = hub.motion_sensor.tilt_angles()\n" +
-        "                    except AttributeError:\n" +
-        "                        angles = hub.imu.tilt_angles()\n" +
-        "                    val = {'PITCH': angles[0], 'ROLL': angles[1], 'YAW': angles[2]}.get(axis.upper(), 0)\n" +
-        "                    resp = ('SEN:TLT:' + axis + ':' + str(val // 10)).encode()\n" +
-        "                except: resp = ('SEN:TLT:' + axis + ':0').encode()\n" +
-        "            elif sub == 'TMR':\n" +
-        "                elapsed = time.ticks_diff(time.ticks_ms(), _timer_start) // 1000\n" +
-        "                resp = ('SEN:TMR:' + str(elapsed)).encode()\n" +
-        "            elif sub == 'TMRR':\n" +
-        "                _timer_start = time.ticks_ms()\n" +
-        "    except: resp = b'err'\n" +
-        "    tunnel.send(resp)\n" +
-        "tunnel.callback(on_message)\n" +
-        "tunnel.send(b'rdy')\n" +
-        "while True:\n" +
-        "    pass\n";
+        "                        should_emit = abs(float(val) - float(last_val)) >= min_change\n" +
+        "                    except (TypeError, ValueError):\n" +
+        "                        should_emit = (val != last_val)\n" +
+        "                else:\n" +
+        "                    should_emit = (val != last_val)\n" +
+        "\n" +
+        "            if should_emit:\n" +
+        "                _sensor_event(pid, stype, val)\n" +
+        "                sub['last_val'] = val\n" +
+        "            sub['last_ms'] = now\n" +
+        "\n" +
+        "        # System metric subscriptions\n" +
+        "        for metric, sub in list(_sys_subscriptions.items()):\n" +
+        "            elapsed = time.ticks_diff(now, sub['last_ms'])\n" +
+        "            if elapsed < sub['interval_ms']:\n" +
+        "                continue\n" +
+        "\n" +
+        "            if metric.startswith('button.'):\n" +
+        "                val = _read_button(metric.split('.')[1])\n" +
+        "            else:\n" +
+        "                val = _read_system_metric(metric)\n" +
+        "\n" +
+        "            if val is not None and val != sub['last_val']:\n" +
+        "                _system_event(metric, val)\n" +
+        "                sub['last_val'] = val\n" +
+        "            sub['last_ms'] = now\n" +
+        "\n" +
+        "        time.sleep_ms(50)\n" +
+        "\n" +
+        "\n" +
+        "# Run when executed on the hub (MicroPython treats this as __main__)\n" +
+        "if __name__ == '__main__':\n" +
+        "    start()\n";
 
-    // =========================================================================
+    // Stable hash of HUB_CONTROLLER_PROGRAM — declared after the constant to avoid
+    // a Java illegal-forward-reference compile error.
+    private static final String PROGRAM_HASH =
+        String.valueOf(HUB_CONTROLLER_PROGRAM.hashCode());
+
+    // In-memory cache: hub address → program hash (session-scoped fallback for
+    // SharedPreferences failures; also makes the first reconnect within a session fast).
+    private static final java.util.concurrent.ConcurrentHashMap<String, String> memCache =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
     // HubDataListener — implemented by sub-components that need hub responses
     // =========================================================================
     interface HubDataListener {
@@ -253,6 +822,66 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
 
     private int maxPacketSize = DEFAULT_MAX_PACKET_SIZE;
     private int maxChunkSize  = 960;
+
+    // =========================================================================
+    // SSP v0.6 infrastructure
+    // =========================================================================
+    final CapabilityStore capabilityStore = new CapabilityStore();
+
+    private final SSPParser sspParser = new SSPParser(new SSPParser.Listener() {
+        @Override public void onCapability(JSONObject cap) {
+            capabilityStore.load(cap);
+            final String device  = cap.optString("device",      "");
+            final String version = cap.optString("ssp_version", "");
+            mainHandler.post(() -> OnCapabilityReceived(device, version));
+            startHeartbeat();
+        }
+        @Override public void onSensor(String port, String type, Object value) {
+            // Sensor events are also dispatched to HubDataListeners below
+        }
+        @Override public void onSystem(String metric, Object value) {
+            // future: surface battery/button events to App Inventor
+        }
+        @Override public void onError(int code, String message, String requestId) {
+            final String rid = requestId != null ? requestId : "";
+            mainHandler.post(() -> OnError(code, message, rid));
+        }
+        @Override public void onPong() {
+            lastPongMs = System.currentTimeMillis();
+        }
+        @Override public void onUnknown(JSONObject raw) {}
+    });
+
+    private Timer heartbeatTimer = null;
+    private volatile long lastPongMs = 0;
+    private static final long HEARTBEAT_INTERVAL_MS = 5000;
+    private static final long PONG_TIMEOUT_MS       = 10000;
+
+    private void startHeartbeat() {
+        stopHeartbeat();
+        lastPongMs = System.currentTimeMillis();
+        heartbeatTimer = new Timer("SSPHeartbeat", true);
+        heartbeatTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override public void run() {
+                if (!isConnected) { cancel(); return; }
+                long since = System.currentTimeMillis() - lastPongMs;
+                if (since > PONG_TIMEOUT_MS) {
+                    cancel();           // stop this TimerTask from firing again
+                    heartbeatTimer = null;
+                    mainHandler.post(() -> OnHeartbeatLost());
+                    return;
+                }
+                sendSSP(new SSPMessage("system.ping"));
+            }
+        }, HEARTBEAT_INTERVAL_MS, HEARTBEAT_INTERVAL_MS);
+    }
+
+    private void stopHeartbeat() {
+        if (heartbeatTimer != null) {
+            heartbeatTimer.cancel();
+            heartbeatTimer = null;
+        }
+    }
 
     private volatile boolean uploadInProgress = false;
     private final java.util.concurrent.LinkedBlockingQueue<byte[]> uploadResponseQueue =
@@ -801,6 +1430,14 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         sendFramedMessage(MessageFramer.pack(MessageBuilder.buildTunnelMessage(command)));
     }
 
+    /** Send an SSP v0.6 JSON command via TunnelMessage. */
+    void sendSSP(SSPMessage msg) {
+        if (!isConnected) { ErrorOccurred("Not connected"); return; }
+        String json = new String(msg.serialise(), StandardCharsets.UTF_8).trim();
+        logDebug("sendSSP: " + json);
+        sendFramedMessage(MessageFramer.pack(MessageBuilder.buildTunnelMessage(json)));
+    }
+
     // =========================================================================
     // Inbound — frame buffer and detection
     // =========================================================================
@@ -862,9 +1499,14 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
                     int payloadSize = (raw[1] & 0xFF) | ((raw[2] & 0xFF) << 8);
                     if (raw.length >= 3 + payloadSize) {
                         String text = new String(raw, 3, payloadSize,
-                            java.nio.charset.StandardCharsets.UTF_8).trim();
+                            StandardCharsets.UTF_8).trim();
                         logDebug("TunnelMessage: " + text);
-                        if (!"rdy".equals(text) && !"err".equals(text)) {
+                        // Route SSP JSON events through SSPParser (capability, pong, error)
+                        if (text.startsWith("{")) {
+                            sspParser.parse((text + "\n").getBytes(StandardCharsets.UTF_8));
+                        }
+                        // Dispatch to component listeners (sensors parse SSP JSON in onHubData)
+                        if (!text.isEmpty() && !"rdy".equals(text) && !"err".equals(text)) {
                             for (HubDataListener l : new ArrayList<>(dataListeners)) {
                                 l.onHubData(text);
                             }
@@ -1014,6 +1656,7 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
 
         logDebug("onConnected: " + deviceName);
 
+        capabilityStore.clear();   // reset so waitForCapability works correctly
         registerForTXNotifications();
         logDebug("Sending InfoRequest");
         sendFramedMessage(MessageFramer.pack(MessageBuilder.buildInfoRequest()));
@@ -1081,6 +1724,7 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
     @SimpleEvent(description = "Fired when the connection to the hub is lost")
     public void HubDisconnected() {
         logDebug("HubDisconnected");
+        stopHeartbeat();
         EventDispatcher.dispatchEvent(this, "HubDisconnected");
     }
 
@@ -1090,6 +1734,30 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         EventDispatcher.dispatchEvent(this, "ErrorOccurred", errorMessage);
     }
 
+    @SimpleEvent(description =
+        "Fired when the hub bridge sends its capability declaration after connection. "
+        + "deviceType: hardware name (e.g. 'spike-prime'). sspVersion: protocol version.")
+    public void OnCapabilityReceived(String deviceType, String sspVersion) {
+        logDebug("OnCapabilityReceived: " + deviceType + " SSP " + sspVersion);
+        EventDispatcher.dispatchEvent(this, "OnCapabilityReceived", deviceType, sspVersion);
+    }
+
+    @SimpleEvent(description =
+        "Fired when the hub bridge reports an error. "
+        + "code: SSP error code (200-499). message: description. requestId: echoed request id if set.")
+    public void OnError(int code, String message, String requestId) {
+        logDebug("OnError " + code + ": " + message);
+        EventDispatcher.dispatchEvent(this, "OnError", code, message, requestId);
+    }
+
+    @SimpleEvent(description =
+        "Fired when the hub bridge stops responding to heartbeat pings. "
+        + "The hub program may have crashed or the BLE connection silently dropped.")
+    public void OnHeartbeatLost() {
+        logDebug("OnHeartbeatLost");
+        EventDispatcher.dispatchEvent(this, "OnHeartbeatLost");
+    }
+
     // =========================================================================
     // Program upload
     // =========================================================================
@@ -1097,6 +1765,27 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         if (!isConnected) { ErrorOccurred("Not connected"); return; }
         new Thread(() -> {
             try {
+                // ---------------------------------------------------------------
+                // Fast path: if this hub already has the current program, skip
+                // the upload and just start the program via ProgramFlow.
+                // ---------------------------------------------------------------
+                String cachedHash = getCachedProgramHash(connectedDeviceAddress);
+                if (PROGRAM_HASH.equals(cachedHash)) {
+                    logDebug("UploadController: hash match — probing hub (skip upload)");
+                    sendFramedMessage(MessageFramer.pack(
+                        MessageBuilder.buildProgramFlowRequest(false, CONTROLLER_SLOT)));
+                    if (waitForCapability(4000)) {
+                        logDebug("UploadController: fast path OK");
+                        final String dn = connectedDeviceName;
+                        mainHandler.post(() -> HubConnected(dn));
+                        return;
+                    }
+                    logDebug("UploadController: fast path failed — doing full upload");
+                }
+
+                // ---------------------------------------------------------------
+                // Full upload path (first connection or stale program).
+                // ---------------------------------------------------------------
                 ProgramUploader up = new ProgramUploader(
                     "program.py", CONTROLLER_SLOT,
                     HUB_CONTROLLER_PROGRAM, maxChunkSize);
@@ -1138,6 +1827,9 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
                 sendFramedMessage(up.getExecuteMessage());
                 awaitUploadResponse(5000);
 
+                // Cache hash so next reconnect can skip upload.
+                setCachedProgramHash(connectedDeviceAddress, PROGRAM_HASH);
+
                 final String dn = connectedDeviceName;
                 mainHandler.post(() -> HubConnected(dn));
 
@@ -1148,6 +1840,36 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
                 uploadInProgress = false;
             }
         }, "LegoSpikeUpload").start();
+    }
+
+    /** Blocks the upload thread until capability arrives or timeoutMs elapses. */
+    private boolean waitForCapability(long timeoutMs) {
+        return capabilityStore.waitForCapability(timeoutMs);
+    }
+
+    private String getCachedProgramHash(String address) {
+        // In-memory cache checked first (fastest, works within a session).
+        if (memCache.containsKey(address)) return memCache.get(address);
+        // SharedPreferences for cross-session persistence.
+        try {
+            android.content.SharedPreferences prefs = form.getApplicationContext()
+                .getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE);
+            return prefs.getString("phash_" + address, null);
+        } catch (Exception e) {
+            logDebug("getCachedProgramHash error: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private void setCachedProgramHash(String address, String hash) {
+        memCache.put(address, hash);
+        try {
+            android.content.SharedPreferences prefs = form.getApplicationContext()
+                .getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE);
+            prefs.edit().putString("phash_" + address, hash).apply();
+        } catch (Exception e) {
+            logDebug("setCachedProgramHash error: " + e.getMessage());
+        }
     }
 
     private byte[] awaitUploadResponse(long timeoutMs) {
