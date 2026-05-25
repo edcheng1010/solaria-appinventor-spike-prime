@@ -50,9 +50,10 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
     public static final String RX_CHAR_UUID       = "0000fd02-0001-1000-8000-00805f9b34fb";
     public static final String TX_CHAR_UUID       = "0000fd02-0002-1000-8000-00805f9b34fb";
 
-    private static final int DEFAULT_MAX_PACKET_SIZE = 20;
-    private static final int CHUNK_DELAY_MS          = 100;
-    private static final int CONTROLLER_SLOT         = 0;
+    private static final int    DEFAULT_MAX_PACKET_SIZE = 20;
+    private static final int    CHUNK_DELAY_MS          = 100;
+    private static final int    CONTROLLER_SLOT         = 0;
+    private static final String PREFS_NAME              = "LegoSpikePrefs";
 
     // =========================================================================
     // Hub controller program embedded as a String.
@@ -779,6 +780,11 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "# Run when executed on the hub (MicroPython treats this as __main__)\n" +
         "if __name__ == '__main__':\n" +
         "    start()\n";
+
+    // Stable hash of HUB_CONTROLLER_PROGRAM — declared after the constant to avoid
+    // a Java illegal-forward-reference compile error.
+    private static final String PROGRAM_HASH =
+        String.valueOf(HUB_CONTROLLER_PROGRAM.hashCode());
 
     // HubDataListener — implemented by sub-components that need hub responses
     // =========================================================================
@@ -1645,6 +1651,7 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
 
         logDebug("onConnected: " + deviceName);
 
+        capabilityStore.clear();   // reset so waitForCapability works correctly
         registerForTXNotifications();
         logDebug("Sending InfoRequest");
         sendFramedMessage(MessageFramer.pack(MessageBuilder.buildInfoRequest()));
@@ -1753,6 +1760,27 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         if (!isConnected) { ErrorOccurred("Not connected"); return; }
         new Thread(() -> {
             try {
+                // ---------------------------------------------------------------
+                // Fast path: if this hub already has the current program, skip
+                // the upload and just start the program via ProgramFlow.
+                // ---------------------------------------------------------------
+                String cachedHash = getCachedProgramHash(connectedDeviceAddress);
+                if (PROGRAM_HASH.equals(cachedHash)) {
+                    logDebug("UploadController: hash match — probing hub (skip upload)");
+                    sendFramedMessage(MessageFramer.pack(
+                        MessageBuilder.buildProgramFlowRequest(false, CONTROLLER_SLOT)));
+                    if (waitForCapability(2000)) {
+                        logDebug("UploadController: fast path OK");
+                        final String dn = connectedDeviceName;
+                        mainHandler.post(() -> HubConnected(dn));
+                        return;
+                    }
+                    logDebug("UploadController: fast path failed — doing full upload");
+                }
+
+                // ---------------------------------------------------------------
+                // Full upload path (first connection or stale program).
+                // ---------------------------------------------------------------
                 ProgramUploader up = new ProgramUploader(
                     "program.py", CONTROLLER_SLOT,
                     HUB_CONTROLLER_PROGRAM, maxChunkSize);
@@ -1794,6 +1822,9 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
                 sendFramedMessage(up.getExecuteMessage());
                 awaitUploadResponse(5000);
 
+                // Cache hash so next reconnect can skip upload.
+                setCachedProgramHash(connectedDeviceAddress, PROGRAM_HASH);
+
                 final String dn = connectedDeviceName;
                 mainHandler.post(() -> HubConnected(dn));
 
@@ -1804,6 +1835,32 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
                 uploadInProgress = false;
             }
         }, "LegoSpikeUpload").start();
+    }
+
+    /** Polls until capability declaration arrives or timeout expires. */
+    private boolean waitForCapability(long timeoutMs) {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (System.currentTimeMillis() < deadline && isConnected) {
+            if (capabilityStore.getDeviceType() != null) return true;
+            try { Thread.sleep(50); } catch (InterruptedException e) { break; }
+        }
+        return capabilityStore.getDeviceType() != null;
+    }
+
+    private String getCachedProgramHash(String address) {
+        try {
+            android.content.SharedPreferences prefs = form.getApplicationContext()
+                .getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE);
+            return prefs.getString("phash_" + address, null);
+        } catch (Exception e) { return null; }
+    }
+
+    private void setCachedProgramHash(String address, String hash) {
+        try {
+            android.content.SharedPreferences prefs = form.getApplicationContext()
+                .getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE);
+            prefs.edit().putString("phash_" + address, hash).apply();
+        } catch (Exception ignored) {}
     }
 
     private byte[] awaitUploadResponse(long timeoutMs) {

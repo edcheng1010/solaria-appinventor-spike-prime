@@ -54,6 +54,15 @@ public class CapabilityStore {
      *
      * @param capability the root capability JSONObject
      */
+    public synchronized void clear() {
+        ports.clear();
+        deviceType = null;
+        sspVersion = null;
+        supportsBatch = false;
+        systemMetrics = Collections.emptyList();
+        loaded = false;
+    }
+
     public synchronized void load(JSONObject capability) {
         ports.clear();
         deviceType   = capability.optString("device", null);
