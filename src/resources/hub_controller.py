@@ -1,13 +1,13 @@
-# LEGO SPIKE Prime hub controller — SSP v0.6 edition.
+# LEGO SPIKE Prime hub controller — SSP v0.8 edition.
 #
-# Wire format: SSP v0.6 json-utf8-newline over TunnelMessage (opcode 0x32).
+# Wire format: SSP v0.8 json-utf8-newline over TunnelMessage (opcode 0x32).
 # Each incoming frame is one newline-terminated JSON string.
 # Each outgoing event is one newline-terminated JSON string.
 #
 # This program is the TYPE 2 "bridge firmware" for the Solaria platform.
 # It runs entirely on the hub via the Python TunnelMessage facility.
 #
-# See: https://github.com/edcheng1010/solaria-hub/blob/main/spec/SSP-v0.6.md
+# See: https://github.com/edcheng1010/solaria-hub/blob/main/spec/SSP-v0.8.md
 
 import hub, motor, motor_pair, time
 from hub import light_matrix, port
@@ -79,12 +79,18 @@ _mov_lp = None          # cached motor_pair left port (skip re-pair when same)
 _mov_rp = None
 
 # Subscriptions: port_id -> {type, mode, interval_ms, min_change, last_ms, last_val}
-# Special port 'battery'/'temperature'/etc. are system metrics.
 _subscriptions = {}
 _sys_subscriptions = {}  # metric -> {interval_ms, last_ms, last_val}
 
 _last_ping_ms = None     # None = heartbeat not yet started
 _heartbeat_active = False
+
+# v0.8: cached volume for sound.read
+_cached_volume = 50
+
+# v0.8: cached motor acceleration rates (port_id -> ms)
+_motor_acceleration = {}
+_movement_acceleration = None
 
 # ---------------------------------------------------------------------------
 # Tunnel setup
@@ -160,8 +166,55 @@ def _show_image(name):
     light_matrix.show_image(idx)
 
 
+def _face_orientation():
+    """Return discrete face orientation string from IMU (v0.7)."""
+    try:
+        # Try firmware API first
+        try:
+            return hub.motion_sensor.get_orientation()
+        except AttributeError:
+            pass
+        # Derive from pitch/roll angles (heuristic)
+        pitch, roll, _ = _tilt_angles()
+        if pitch > 60:   return 'port_e_up'
+        if pitch < -60:  return 'port_a_up'
+        if roll > 60:    return 'face_down'
+        if roll < -60:   return 'face_up'
+        return 'face_up'
+    except Exception:
+        return 'face_up'
+
+
+def _angular_velocity():
+    """Return angular velocity {x, y, z} in deg/s (v0.7)."""
+    try:
+        av = hub.motion_sensor.angular_velocity()
+        return {'x': av[0], 'y': av[1], 'z': av[2]}
+    except Exception:
+        return {'x': 0, 'y': 0, 'z': 0}
+
+
 def _read_sensor_value(port_id, sensor_type):
     """Reads a sensor value. Returns None on error."""
+    # IMU-specific types routed directly
+    if port_id == 'imu' or sensor_type in ('pitch', 'roll', 'yaw',
+                                             'face_orientation', 'angular_velocity',
+                                             'acceleration'):
+        try:
+            if sensor_type == 'pitch':          return _tilt_angles()[0]
+            if sensor_type == 'roll':           return _tilt_angles()[1]
+            if sensor_type == 'yaw':            return _tilt_angles()[2]
+            if sensor_type == 'face_orientation': return _face_orientation()
+            if sensor_type == 'angular_velocity': return _angular_velocity()
+            if sensor_type == 'acceleration':
+                try:
+                    acc = hub.motion_sensor.acceleration()
+                    return {'x': acc[0], 'y': acc[1], 'z': acc[2]}
+                except Exception:
+                    return {'x': 0, 'y': 0, 'z': 0}
+        except Exception:
+            return None
+
     p = PORTS.get(port_id.upper())
     if p is None or not _sensors_ok:
         return None
@@ -169,6 +222,12 @@ def _read_sensor_value(port_id, sensor_type):
         if sensor_type == 'color':
             c = color_sensor.color(p)
             return _CLR_MAP.get(c, str(c))
+        elif sensor_type == 'rgb':
+            try:
+                rgb = color_sensor.rgb(p)
+                return [rgb[0], rgb[1], rgb[2]]
+            except Exception:
+                return [0, 0, 0]
         elif sensor_type == 'reflected':
             return color_sensor.reflection(p)
         elif sensor_type == 'ambient':
@@ -179,12 +238,6 @@ def _read_sensor_value(port_id, sensor_type):
             return force_sensor.force(p)
         elif sensor_type == 'touched':
             return force_sensor.pressed(p)
-        elif sensor_type == 'pitch':
-            return _tilt_angles()[0]
-        elif sensor_type == 'roll':
-            return _tilt_angles()[1]
-        elif sensor_type == 'yaw':
-            return _tilt_angles()[2]
     except Exception:
         return None
 
@@ -232,10 +285,12 @@ def _build_capability():
             ports_list.append({
                 'id': pid,
                 'type': 'motor',
-                'features': ['speed', 'position', 'stall'],
+                'features': ['speed', 'position', 'stall', 'power', 'acceleration'],
+                'goto_modes': ['absolute', 'relative'],
                 'constraints': {
-                    'speed':    {'type': 'int', 'min': -100, 'max': 100},
-                    'position': {'type': 'int', 'min': 0, 'max': 359, 'wraps': True},
+                    'speed':        {'type': 'int', 'min': -100, 'max': 100},
+                    'position':     {'type': 'int', 'min': 0, 'max': 359, 'wraps': True},
+                    'acceleration': {'type': 'int', 'min': 0, 'max': 10000},
                 },
             })
         except Exception:
@@ -247,6 +302,7 @@ def _build_capability():
         'type': 'display',
         'width': 5, 'height': 5, 'depth': 'grayscale',
         'features': ['pixel', 'image', 'text', 'brightness', 'orientation'],
+        # 'touch' feature omitted until FW support is verified
     })
 
     # Status LED (always present)
@@ -255,40 +311,45 @@ def _build_capability():
         'type': 'led',
         'features': ['set'],
         'constraints': {
-            'color': {
-                'type': 'enum',
-                'values': list(_LED_COLORS.keys()),
-            },
+            'color': {'type': 'enum', 'values': list(_LED_COLORS.keys())},
         },
     })
 
-    # IMU (always present on SPIKE Prime 3.x)
+    # IMU (always present on SPIKE Prime 3.x) — v0.7/v0.8 features
     ports_list.append({
         'id': 'imu',
         'type': 'orientation',
-        'features': ['pitch', 'roll', 'yaw', 'gesture'],
+        'features': ['pitch', 'roll', 'yaw', 'gesture', 'face_orientation', 'angular_velocity'],
         'constraints': {
             'gesture': {
                 'type': 'enum',
                 'values': ['shake', 'tap', 'double_tap', 'fall', 'face_up', 'face_down'],
             },
+            'face_orientation': {
+                'type': 'enum',
+                'values': ['face_up', 'face_down', 'port_a_up', 'port_a_down',
+                           'port_e_up', 'port_e_down'],
+            },
         },
     })
 
-    # Speaker
+    # Speaker — v0.8: volume + sound_wait_supported
     ports_list.append({
         'id': 'speaker',
         'type': 'speaker',
-        'features': ['beep'],
+        'features': ['beep', 'volume'],
+        'sound_wait_supported': True,
+        # 'builtin' and 'midi' features added after FW API verification
     })
 
     return {
         'type': 'capability',
         'device': 'spike-prime',
         'firmware': '3.x',
-        'ssp_version': '0.6',
+        'ssp_version': '0.8',
         'encodings': ['json-utf8-newline'],
         'supports_batch': False,
+        'tank_drive': True,
         'system_metrics': [
             'battery', 'charging', 'temperature',
             'button.left', 'button.right', 'button.center',
@@ -302,8 +363,16 @@ def _build_capability():
 # ---------------------------------------------------------------------------
 
 def _handle_motor(cmd, obj, req_id):
-    action = cmd.split('.')[1]  # run, stop, goto, reset
+    action = cmd.split('.')[1]  # run, stop, goto, reset, set_acceleration
     port_id = obj.get('port', '').upper()
+
+    # set_acceleration doesn't need a physical port
+    if action == 'set_acceleration':
+        rate = int(obj.get('rate', 500))
+        _motor_acceleration[port_id] = rate
+        # SPIKE FW may not expose hardware-level accel; cache client-side for now
+        return
+
     p = PORTS.get(port_id)
     if p is None:
         _send_error(201, 'Unknown port: ' + port_id, req_id)
@@ -311,7 +380,10 @@ def _handle_motor(cmd, obj, req_id):
 
     try:
         if action == 'run':
-            spd = int(obj.get('speed', 0)) * 11
+            raw_speed = int(obj.get('speed', 0))
+            mode = obj.get('mode', 'speed')
+            # Power mode: treat speed param as 0-100% duty cycle (same scaling on SPIKE)
+            spd = raw_speed * 11
             dur = obj.get('duration')
             unit = obj.get('duration_unit', 'ms')
             if dur is not None:
@@ -323,6 +395,7 @@ def _handle_motor(cmd, obj, req_id):
                 elif unit == 'rotations':
                     motor.run_for_degrees(p, dur * 360, spd)
             else:
+                # omitting duration = run indefinitely (v0.8 §6.1)
                 motor.run(p, spd)
 
         elif action == 'stop':
@@ -337,7 +410,13 @@ def _handle_motor(cmd, obj, req_id):
         elif action == 'goto':
             pos = int(obj.get('position', 0))
             spd = int(obj.get('speed', 50)) * 11
-            motor.run_to_position(p, pos, spd)
+            goto_mode = obj.get('mode', 'absolute')
+            if goto_mode == 'relative':
+                # Relative: run_for_degrees from current position
+                motor.run_for_degrees(p, pos, spd)
+            else:
+                # Absolute (default)
+                motor.run_to_position(p, pos, spd)
 
         elif action == 'reset':
             motor.reset_relative_position(p, 0)
@@ -347,9 +426,14 @@ def _handle_motor(cmd, obj, req_id):
 
 
 def _handle_movement(cmd, obj, req_id):
-    action = cmd.split('.')[1]  # configure, drive, turn, stop
+    global _movement_acceleration
+    action = cmd.split('.')[1]  # configure, drive, turn, stop, set_acceleration
 
     try:
+        if action == 'set_acceleration':
+            _movement_acceleration = int(obj.get('rate', 500))
+            return
+
         if action == 'configure':
             lp = obj.get('left', '').upper()
             rp = obj.get('right', '').upper()
@@ -361,20 +445,27 @@ def _handle_movement(cmd, obj, req_id):
             rp = obj.get('right', _mov_rp or 'B').upper()
             if lp in PORTS and rp in PORTS:
                 _ensure_pair(lp, rp)
-            steering = int(obj.get('steering', 0))
-            vel = int(obj.get('speed', 50)) * 11
-            dur = obj.get('duration')
-            unit = obj.get('duration_unit', 'ms')
-            if dur is not None:
-                dur = int(dur)
-                if unit == 'degrees':
-                    motor_pair.move_for_degrees(motor_pair.PAIR_1, dur, steering, velocity=vel)
-                elif unit == 'rotations':
-                    motor_pair.move_for_degrees(motor_pair.PAIR_1, dur * 360, steering, velocity=vel)
-                else:
-                    motor_pair.move_for_time(motor_pair.PAIR_1, dur, steering, velocity=vel)
+
+            # v0.7 tank drive: explicit left_speed / right_speed
+            if 'left_speed' in obj or 'right_speed' in obj:
+                l_vel = int(obj.get('left_speed', 0)) * 11
+                r_vel = int(obj.get('right_speed', 0)) * 11
+                motor_pair.move_tank(motor_pair.PAIR_1, l_vel, r_vel)
             else:
-                motor_pair.move(motor_pair.PAIR_1, steering, velocity=vel)
+                steering = int(obj.get('steering', 0))
+                vel = int(obj.get('speed', 50)) * 11
+                dur = obj.get('duration')
+                unit = obj.get('duration_unit', 'ms')
+                if dur is not None:
+                    dur = int(dur)
+                    if unit == 'degrees':
+                        motor_pair.move_for_degrees(motor_pair.PAIR_1, dur, steering, velocity=vel)
+                    elif unit == 'rotations':
+                        motor_pair.move_for_degrees(motor_pair.PAIR_1, dur * 360, steering, velocity=vel)
+                    else:
+                        motor_pair.move_for_time(motor_pair.PAIR_1, dur, steering, velocity=vel)
+                else:
+                    motor_pair.move(motor_pair.PAIR_1, steering, velocity=vel)
 
         elif action == 'turn':
             angle = int(obj.get('angle', 90))
@@ -447,26 +538,89 @@ def _handle_led(cmd, obj, req_id):
 
 
 def _handle_sound(cmd, obj, req_id):
-    action = cmd.split('.')[1]  # beep, play, stop, set_volume
+    global _cached_volume
+    action = cmd.split('.')[1]  # beep, play, stop, set_volume, read
     try:
         if action == 'beep':
             freq = int(obj.get('freq', 440))
-            dur = int(obj.get('duration', 200))
-            hub.sound.beep(freq, dur)
+            dur = obj.get('duration')
+            if dur is not None:
+                hub.sound.beep(int(dur), freq)
+            else:
+                # Indefinite beep — no native API; just beep for a long time
+                hub.sound.beep(30000, freq)
+
         elif action == 'stop':
             hub.sound.stop()
+
         elif action == 'play':
+            wait = obj.get('wait', False)
             sound_name = obj.get('sound')
+            notes = obj.get('notes')
+            if notes:
+                # v0.8 MIDI notes — parse and play via beep sequences (best effort)
+                _play_notes_sequence(notes, int(obj.get('tempo', 120)), req_id)
+                return
             if sound_name:
-                hub.sound.play(str(sound_name))
+                if wait:
+                    try:
+                        hub.sound.play(str(sound_name), volume=_cached_volume)
+                        _send({'event': 'sound_complete', 'request_id': req_id} if req_id else
+                              {'event': 'sound_complete'})
+                    except TypeError:
+                        hub.sound.play(str(sound_name))
+                        _send({'event': 'sound_complete'})
+                else:
+                    hub.sound.play(str(sound_name))
+
         elif action == 'set_volume':
             level = int(obj.get('level', 50))
+            _cached_volume = max(0, min(100, level))
             try:
-                hub.sound.set_volume(level)
+                hub.sound.set_volume(_cached_volume)
             except AttributeError:
                 pass
+
+        elif action == 'read':
+            metric = obj.get('metric', 'volume')
+            if metric == 'volume':
+                _send({'event': 'sound', 'metric': 'volume', 'value': _cached_volume})
+
     except Exception as e:
         _send_error(301, 'Sound error: ' + str(e), req_id)
+
+
+def _play_notes_sequence(notes_str, tempo, req_id):
+    """Parse v0.8 §6.3.1 notes string and play as beeps (best-effort MIDI)."""
+    # Note name -> frequency mapping (A4=440 Hz standard)
+    NOTE_FREQ = {
+        'C': 261, 'C#': 277, 'Db': 277, 'D': 293, 'D#': 311, 'Eb': 311,
+        'E': 329, 'F': 349, 'F#': 369, 'Gb': 369, 'G': 392, 'G#': 415,
+        'Ab': 415, 'A': 440, 'A#': 466, 'Bb': 466, 'B': 493,
+    }
+    ms_per_beat = int(60000 / max(1, tempo))
+    try:
+        tokens = notes_str.strip().split()
+        for token in tokens:
+            if ':' not in token:
+                continue
+            note_part, dur_part = token.rsplit(':', 1)
+            duration_ms = int(float(dur_part) * ms_per_beat)
+            if note_part == 'R':
+                time.sleep_ms(duration_ms)
+                continue
+            # Strip octave digit to get note name, then compute freq
+            import re as _re
+            m = _re.match(r'([A-G][#b]?)(\d)', note_part)
+            if m:
+                name, octave = m.group(1), int(m.group(2))
+                base_freq = NOTE_FREQ.get(name, 440)
+                freq = int(base_freq * (2 ** (octave - 4)))
+                hub.sound.beep(duration_ms, freq)
+            else:
+                time.sleep_ms(duration_ms)
+    except Exception:
+        pass  # degrade silently
 
 
 def _handle_sensor(cmd, obj, req_id):
@@ -496,18 +650,9 @@ def _handle_sensor(cmd, obj, req_id):
 
     elif action == 'read':
         sensor_type = obj.get('type', 'color')
-        if port_id == 'imu':
-            angles = _tilt_angles()
-            if sensor_type == 'pitch':
-                _sensor_event(port_id, 'pitch', angles[0], req_id)
-            elif sensor_type == 'roll':
-                _sensor_event(port_id, 'roll', angles[1], req_id)
-            elif sensor_type == 'yaw':
-                _sensor_event(port_id, 'yaw', angles[2], req_id)
-        else:
-            val = _read_sensor_value(port_id, sensor_type)
-            if val is not None:
-                _sensor_event(port_id, sensor_type, val, req_id)
+        val = _read_sensor_value(port_id, sensor_type)
+        if val is not None:
+            _sensor_event(port_id, sensor_type, val, req_id)
 
 
 def _handle_system(cmd, obj, req_id):
@@ -523,7 +668,7 @@ def _handle_system(cmd, obj, req_id):
         _send({
             'event': 'system_info',
             'device': 'spike-prime',
-            'ssp_version': '0.6',
+            'ssp_version': '0.8',
         })
 
     elif action == 'subscribe':
@@ -554,6 +699,27 @@ def _handle_system(cmd, obj, req_id):
 
     elif action == 'reset':
         pass  # no-op on this platform
+
+
+def _handle_orientation(cmd, obj, req_id):
+    """v0.7 orientation.* command category."""
+    action = cmd.split('.')[1]  # set_yaw, reset_yaw, set_reference
+    try:
+        if action == 'reset_yaw':
+            hub.motion_sensor.reset_yaw_angle()
+        elif action == 'set_yaw':
+            angle = int(obj.get('angle', 0))
+            # SPIKE FW: reset to 0, no direct set_yaw — approximate by resetting
+            # and relying on user to physically orient the hub, or set as offset
+            hub.motion_sensor.reset_yaw_angle()  # best effort; offset not stored
+        elif action == 'set_reference':
+            face = obj.get('face', 'face_up')
+            try:
+                hub.motion_sensor.set_yaw_face(face)
+            except AttributeError:
+                pass  # not available on all FW versions
+    except Exception as e:
+        _send_error(301, 'Orientation error: ' + str(e), req_id)
 
 
 def _read_button(name):
@@ -608,6 +774,8 @@ def on_message(data):
             _handle_sensor(cmd, obj, req_id)
         elif cmd.startswith('system.'):
             _handle_system(cmd, obj, req_id)
+        elif cmd.startswith('orientation.'):
+            _handle_orientation(cmd, obj, req_id)
         else:
             _send_error(400, 'Unknown command: ' + cmd, req_id)
     except Exception as e:
@@ -645,11 +813,7 @@ def _run_loop():
                 continue
 
             stype = sub['type']
-            if pid == 'imu':
-                angles = _tilt_angles()
-                val = {'pitch': angles[0], 'roll': angles[1], 'yaw': angles[2]}.get(stype, 0)
-            else:
-                val = _read_sensor_value(pid, stype)
+            val = _read_sensor_value(pid, stype)
 
             if val is None:
                 continue
