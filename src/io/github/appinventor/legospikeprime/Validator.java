@@ -4,6 +4,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -88,7 +89,9 @@ public class Validator {
 
         // Check each param that has a declared constraint
         boolean valid = true;
-        for (String key : obj.keySet()) {
+        Iterator<String> iter = obj.keys();
+        while (iter.hasNext()) {
+            String key = iter.next();
             if (key.equals("cmd") || key.equals("port") || key.equals("request_id")) continue;
 
             String constraintType = store.getConstraintType(portId, key);
