@@ -97,14 +97,17 @@ public class LegoSpikeMotors extends AndroidNonvisibleComponent {
         + "Set Port and Direction in the Designer or via blocks first.")
     public void StartMotor() {
         if (!checkConnected()) return;
-        String dirCode = "counterclockwise".equalsIgnoreCase(direction) ? "CCW" : "CW";
-        connectivity.sendCommand(String.format("MTR:%s:%s:%03d", port, dirCode, speed));
+        int effectiveSpeed = "counterclockwise".equalsIgnoreCase(direction) ? -speed : speed;
+        connectivity.sendSSP(
+            new SSPMessage("motor.run")
+                .withPort(port)
+                .withParam("speed", effectiveSpeed));
     }
 
     @SimpleFunction(description = "Stop the motor on the configured Port")
     public void StopMotor() {
         if (!checkConnected()) return;
-        connectivity.sendCommand("MTR:" + port + ":STOP");
+        connectivity.sendSSP(new SSPMessage("motor.stop").withPort(port));
     }
 
     @SimpleFunction(description =

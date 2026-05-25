@@ -77,20 +77,26 @@ public class LegoSpikeLight extends AndroidNonvisibleComponent {
         "Turn on the 5x5 light matrix with the configured Image.")
     public void TurnOnLightMatrix() {
         if (!checkConnected()) return;
-        connectivity.sendCommand("LGT:ON:" + image);
+        connectivity.sendSSP(
+            new SSPMessage("led.matrix.image")
+                .withPort("display")
+                .withParam("image", image.toUpperCase()));
     }
 
     @SimpleFunction(description = "Turn off the 5x5 light matrix")
     public void TurnOffLightMatrix() {
         if (!checkConnected()) return;
-        connectivity.sendCommand("LGT:OFF");
+        connectivity.sendSSP(new SSPMessage("led.matrix.clear").withPort("display"));
     }
 
     @SimpleFunction(description = "Scroll text across the 5x5 light matrix")
     public void WriteOnLightMatrix(String text) {
         if (!checkConnected()) return;
         if (text == null) text = "";
-        connectivity.sendCommand("LGT:TXT:" + text);
+        connectivity.sendSSP(
+            new SSPMessage("led.matrix.text")
+                .withPort("display")
+                .withParam("text", text));
     }
 
     @SimpleFunction(description =
@@ -98,10 +104,12 @@ public class LegoSpikeLight extends AndroidNonvisibleComponent {
         + "x: column 1–5 (left to right), y: row 1–5 (top to bottom).")
     public void SetPixelBrightness(int x, int y, int brightness) {
         if (!checkConnected()) return;
-        connectivity.sendCommand(String.format("LGT:PIX:%d:%d:%d",
-            Math.max(1, Math.min(5, x)) - 1,
-            Math.max(1, Math.min(5, y)) - 1,
-            Math.max(0, Math.min(100, brightness))));
+        connectivity.sendSSP(
+            new SSPMessage("led.matrix.pixel")
+                .withPort("display")
+                .withParam("x", Math.max(1, Math.min(5, x)) - 1)
+                .withParam("y", Math.max(1, Math.min(5, y)) - 1)
+                .withParam("brightness", Math.max(0, Math.min(100, brightness))));
     }
 
     // =========================================================================
