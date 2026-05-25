@@ -1807,6 +1807,30 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
     }
 
     // =========================================================================
+    // SSP v0.7 orientation commands
+    // =========================================================================
+
+    @SimpleFunction(description = "Reset the hub yaw angle to zero.")
+    public void ResetYaw() {
+        if (!isConnected) { ErrorOccurred("Not connected"); return; }
+        sendSSP(new SSPMessage("orientation.reset_yaw"));
+    }
+
+    @SimpleFunction(description = "Set the hub yaw to a specific angle in degrees.")
+    public void SetYaw(int degrees) {
+        if (!isConnected) { ErrorOccurred("Not connected"); return; }
+        sendSSP(new SSPMessage("orientation.set_yaw").withParam("angle", degrees));
+    }
+
+    @SimpleFunction(description =
+        "Configure the hub mounting reference orientation. "
+        + "face: face_up, face_down, port_a_up, port_a_down, port_e_up, port_e_down.")
+    public void SetHubSensorOrientation(String face) {
+        if (!isConnected) { ErrorOccurred("Not connected"); return; }
+        sendSSP(new SSPMessage("orientation.set_reference").withParam("face", face));
+    }
+
+    // =========================================================================
     // Program upload
     // =========================================================================
     private void UploadController() {
