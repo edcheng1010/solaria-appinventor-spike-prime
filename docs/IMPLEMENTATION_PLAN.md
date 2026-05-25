@@ -268,26 +268,38 @@ Every block from the post-MVP roadmap, mapped to v0.6 commands:
 | Light matrix animation (multiple pixels per frame) | `cmd:"batch"` with `atomic:true` per frame — bridge adds `supports_batch: true` to capability |
 | `LightUpDistanceSensor(topLeft, topRight, bottomLeft, bottomRight)` | Open — sensor-attached 4-LED indicator. v0.7 candidate as a `display` port on the distance sensor itself (width:2, height:2, depth:grayscale). Ship as `x_distance_led` extension until spec'd. |
 | 3×3 Color Matrix accessory blocks | Open — would be a `display` port (3×3 rgb). Ship as separate component (`LegoSpikeColorMatrix`) only if the accessory is in scope; otherwise defer to v0.7+ |
+| `WhenLightMatrixTapped` | Open — newer SPIKE firmware exposes the 5×5 matrix as touch-sensitive. Verify FW 3.x API; if supported, fires `system`-style event. v0.7 candidate for canonical `touch` feature on `display` port |
 
 **Acceptance criteria additional:** light matrix animation perf benchmark — 25 pixels updated at 10 Hz, single `batch` command per frame, no payload drops.
 
 ### 3.4 `LegoSpikeSensors` expansion (IMU + threshold events)
+
+**IMU / orientation:**
 
 | Block | SSP v0.6 mapping |
 |---|---|
 | `GetHubAcceleration()` | `sensor.read` on `imu` port (`acceleration` feature) |
 | `GetHubAngularVelocity()` | Open — no canonical feature in v0.6. Use `x_angular_velocity` or compute client-side from pitch/roll/yaw deltas |
 | `GetHubOrientation()` | Aggregates pitch/roll/yaw client-side |
+| `GetHubFaceOrientation()` | Discrete enum: `face_up`/`face_down`/`port_a_up`/`port_a_down`/`port_e_up`/`port_e_down`. Computed client-side from pitch/roll OR filed as v0.7 canonical `face_orientation` feature on `orientation` port |
 | `GetGesture()` | Last cached gesture event value |
 | `WhenGesture(type)` | Gesture event from `imu` port; dropdown values populated from v0.6 capability constraint enum |
 | `WhenHubShaken` | Convenience block — `WhenGesture("shake")` |
 | `ResetYaw()` | Open — no canonical command in v0.6. Use `x_reset_yaw` extension; file v0.7 wishlist |
+| `SetYaw(degrees)` | Open — no canonical command in v0.6. `x_set_yaw` extension; file v0.7 wishlist |
 | `SetHubSensorOrientation(orientation)` | Open — similar, `x_set_orientation` extension |
+
+**Port-attached sensors (color / distance / force):**
+
+| Block | SSP v0.6 mapping |
+|---|---|
 | `GetRelativeMotorPosition()` | Listed under sensors in roadmap but actually a motor sensor; covered by §3.1 |
 | `GetReflectedLight()` | `sensor.read` on color sensor port (`reflected` feature) |
+| `GetColorRGB()` → `ColorRGBRead(port, r, g, b)` event | `sensor.read` on color sensor port (`rgb` feature). Event value is a 3-element array `[r, g, b]`. |
 | `IsColor(name)` / `IsDistance(threshold)` / `IsPressed()` | Client-side boolean derived from last subscription value |
-| `WhenColorIs` / `WhenCloserThan` / `WhenPressureIs` / `WhenTilted` | `sensor.subscribe` with `mode:"on_change"`; threshold evaluated client-side, event fires when crossing |
-| `WhenTimer` | Client-side timer (no SSP equivalent needed) |
+| `WhenColorIs(name)` / `WhenCloserThan(cm)` / `WhenPressureIs(threshold)` / `WhenTilted(direction)` | `sensor.subscribe` with `mode:"on_change"`; threshold evaluated client-side, event fires when crossing |
+| `WhenColorChanges` / `WhenDistanceChanges` / `WhenPressureChanges` | `sensor.subscribe` with `mode:"on_change"`, no threshold — fires whenever the value changes at all |
+| `WhenTimer(seconds)` | Client-side timer (no SSP equivalent needed) |
 
 ### 3.5 `LegoSpikeSound` *(new component)*
 
@@ -300,6 +312,7 @@ Phase-2 bridge declared `speaker` with only `beep`. Phase 3 adds full speaker su
 | `StartPlayingBeep(freq)` | `sound.beep` with no duration (verify spec — may need `duration:0` or `duration:Infinity` convention) |
 | `StopAllSounds()` | `sound.stop` |
 | `SetVolume(level)` | `sound.set_volume` — bridge adds `volume` feature on speaker port |
+| `GetVolume()` | Client-side cache of last `SetVolume` value. v0.6 has no `sound.get_volume`; file v0.7 wishlist if a real getter is needed |
 | `PlayBuiltin(name)` / `StartSound(name)` | `sound.play` with `sound` field; dropdown populated from `builtin_sounds` capability array |
 | `PlaySoundUntilDone(name)` | Send `sound.play`, block on completion event from bridge (verify bridge emits `{"event":"sound_complete"}` or similar) |
 
@@ -330,7 +343,22 @@ Component exists ONLY if SPIKE FW 3.x supports MIDI-style note playback. If not,
 | `WhenButtonPressed(button)` / `WhenButtonReleased(button)` / `WhenButtonHeld(button)` | `system.subscribe metric=button.<name>`; event fires on state-transition |
 | `WhenHubButtonPressed` | Convenience — equivalent to `WhenButtonPressed("center")` |
 
-### 3.8 Architecture update
+### 3.8 SPIKE Prime block categories handled at the App Inventor layer
+
+The SPIKE Prime native app has several block categories that should NOT be reimplemented in this extension — they map directly to existing App Inventor primitives. Documenting here so future contributors don't redundantly add them:
+
+| SPIKE category | App Inventor equivalent |
+|---|---|
+| **Control flow** — `repeat`, `forever`, `if/else`, `while` | App Inventor `Control` blocks (`while`, `if then`, `for each`, etc.) |
+| **Wait blocks** — `wait N seconds`, `wait until <condition>` | App Inventor `Clock` component + a polling loop |
+| **Operators** — math, logic, string ops, random | App Inventor `Math`, `Logic`, `Text` blocks |
+| **Variables / globals** | App Inventor `Variables` blocks (initialize, set, get) |
+| **My Blocks** — user-defined procedures | App Inventor `Procedures` blocks |
+| **Boolean inputs** to event handlers | App Inventor parameter passing |
+
+This means a user porting a SPIKE app project into App Inventor needs to translate hardware blocks via this extension AND control-flow / data blocks via App Inventor's built-ins. Worth documenting in `docs/SSP_BRIDGE_GUIDE.md` once Phase 3 ships.
+
+### 3.9 Architecture update
 
 After Phase 3 lands:
 - **7 components default**: Connectivity, Motors, Movement, Light, Sensors, Sound, System
@@ -339,18 +367,23 @@ After Phase 3 lands:
 - **Update `README.md`** Components table (currently lists 5)
 - **Update `docs/SSP_BRIDGE_GUIDE.md`** with the full v0.6 mapping table
 
-### 3.9 v0.7 wishlist candidates surfaced during Phase 3
+### 3.10 v0.7 wishlist candidates surfaced during Phase 3
 
 To file as `SSP v0.7 wishlist` issue against `solaria-hub` once Phase 3 implementation surfaces concrete need:
 
 - `motor.set_acceleration` action + `acceleration` feature on motor port
 - `motor.run mode:"power"` to distinguish power-control from speed-control
 - `orientation.reset` (or `imu.reset_yaw`) command for IMU
+- `orientation.set_yaw` to set yaw to a specific value (not just reset to zero)
 - `orientation.set_reference` for hub mounting orientation
+- `face_orientation` feature on `orientation` port — discrete enum of which hub face is currently up (face_up, face_down, port_a_up, port_a_down, port_e_up, port_e_down)
+- `angular_velocity` feature on `orientation` port — currently no canonical name
 - 3×3 RGB matrix display support (already partly covered by `display` port `depth:"rgb"` — but `width:3, height:3` would need spec example)
 - Sensor-attached LEDs (distance sensor 4-LED indicator) — likely a `display` port type on sensor ports
+- `touch` feature on `display` port — for SPIKE 5×5 light matrix tap detection (newer FW)
 - Movement `left_speed`/`right_speed` for tank-style control
 - Sound `play_until_done` semantics — does `sound.play` return immediately or block? Spec should say.
+- `sound.get_volume` getter — v0.6 only has `sound.set_volume`
 
 ---
 
@@ -549,7 +582,7 @@ The broader strategic direction for the Solaria platform is documented in [VISIO
 | v0.4 | #3 | ✅ Integrated | Parameter constraints, gesture event consistency |
 | v0.5 | #4 | ✅ Integrated | Button format, array constraint type, gesture constraints, display dimension implicit constraints, plus `string` constraint type as bonus |
 | v0.6 | #5 | ✅ Integrated | RFCOMM transport, binary encoding finalised, batch commands, motor duration/stop_action, sound.set_volume, led.matrix.brightness/orientation |
-| v0.7 | TBD | 📝 Pending | Items in §3.9 above to file once Phase 3 surfaces concrete need |
+| v0.7 | TBD | 📝 Pending | Items in §3.10 above to file once Phase 3 surfaces concrete need |
 
 ---
 
@@ -611,7 +644,7 @@ These remain unresolved and should be answered before / during the relevant phas
 1. Read this document and `ARCHITECTURE.md` before starting any task.
 2. Within a phase, tasks must be completed in section order. Within §2.3 (component migration), Connectivity must land first — other components depend on `CapabilityStore` integration.
 3. Do not mark a phase complete until all acceptance criteria are verified on a physical hub.
-4. Open the v0.7 wishlist issue against `solaria-hub` (per §3.9) when Phase 3 surfaces concrete needs — don't file speculatively.
+4. Open the v0.7 wishlist issue against `solaria-hub` (per §3.10) when Phase 3 surfaces concrete needs — don't file speculatively.
 5. Before committing, check that no MIT Hong Kong Innovation Node references have crept back in (the repo is public).
 6. Commit messages: plain, no Co-Authored-By trailer (project owner preference).
 7. Do not push to remote without explicit per-commit approval from the project owner.
