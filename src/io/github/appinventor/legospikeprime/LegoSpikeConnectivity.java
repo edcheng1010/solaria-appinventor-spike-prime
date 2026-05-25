@@ -855,6 +855,7 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
                 if (!isConnected) { cancel(); return; }
                 long since = System.currentTimeMillis() - lastPongMs;
                 if (since > PONG_TIMEOUT_MS) {
+                    cancel();           // stop this TimerTask from firing again
                     heartbeatTimer = null;
                     mainHandler.post(() -> OnHeartbeatLost());
                     return;
