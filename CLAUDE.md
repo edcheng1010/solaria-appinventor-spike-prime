@@ -27,10 +27,12 @@ This is an MIT App Inventor extension for LEGO SPIKE Prime hubs, developed by Ed
    - You must stop scanning before initiating a connection to a hub.
    - Use the `wasScanningBeforeConnection` flag to resume scanning if the connection fails or drops.
 
-5. **NEVER send direct motor/LED commands via BLE to SPIKE Prime 3.x.**
-   - SPIKE Prime 3.x does NOT support direct hardware control via BLE commands.
-   - You MUST use the TunnelMessage approach: upload a Python controller program to the hub first, then send commands via TunnelMessage (0x32).
-   - See ARCHITECTURE.md Section 4 for the complete protocol specification.
+5. **ALWAYS use SSP v0.6 JSON commands over TunnelMessage — never custom binary strings.**
+   - SPIKE Prime 3.x does NOT support direct hardware control via raw BLE commands.
+   - The wire format is SSP v0.6 JSON (e.g. `{"cmd":"motor.run","port":"A","speed":75}`) sent as a newline-terminated UTF-8 string via TunnelMessage (opcode 0x32), COBS-encoded.
+   - Use `LegoSpikeConnectivity.sendSSP(SSPMessage)` — never `sendCommand(String)` with custom binary strings.
+   - The hub-side Python controller (`hub_controller.py`) parses the SSP JSON; it is automatically uploaded on first connection to a new hub.
+   - See `docs/SSP_BRIDGE_GUIDE.md` for the complete SSP v0.6 mapping and `spec/SSP-v0.6.md` in solaria-hub for the protocol specification.
 
 6. **ALWAYS use correct COBS encoding constants.**
    - DELIMITER = 0x02

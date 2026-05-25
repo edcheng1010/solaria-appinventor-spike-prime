@@ -55,36 +55,48 @@ Over 17 iterations, several critical decisions were made to solve specific hardw
 - **Problem:** Scanning while trying to connect causes connection failures.
 - **Current Solution:** The extension explicitly stops scanning before initiating a connection, and uses a `wasScanningBeforeConnection` flag to resume scanning if the connection fails or drops.
 
-## 4. CRITICAL PROTOCOL CORRECTION (Discovered April 25, 2026)
+## 4. SSP v0.6 WIRE PROTOCOL (Phase 2 — current implementation)
 
-**This is the most important finding since the project began.** Competitive analysis and review of LEGO's official documentation revealed that our current motor/LED control approach is fundamentally incorrect for SPIKE Prime 3.x firmware.
+**This section supersedes the old "CRITICAL PROTOCOL CORRECTION" note.** The extension now implements [SSP v0.6](https://github.com/edcheng1010/solaria-hub/blob/main/spec/SSP-v0.6.md) — the Solaria Standard Protocol — for all motor, sensor, and LED commands. See `docs/SSP_BRIDGE_GUIDE.md` for the full SPIKE Prime → SSP mapping.
 
-### 4.1 The Problem
-Our current code attempts to send direct motor/LED commands via BLE. This approach works for LEGO Wireless Protocol 3.0 devices (SPIKE Essential, Boost, Technic) but does NOT work for SPIKE Prime 3.x firmware.
+### 4.1 Transport (unchanged from MVP)
+All communication uses TunnelMessage (opcode `0x32`) over BLE, COBS-encoded.
 
-### 4.2 The Correct Architecture (Confirmed by LEGO Developer)
-SPIKE Prime 3.x uses a **two-part architecture**:
+**On first connection to a new hub:**
+1. Clear slot: `0x46 0x00` (ClearSlotRequest)
+2. Start file upload: `0x0C` + filename + slot + CRC32 (StartFileUploadRequest)
+3. Transfer chunks: `0x10` + running_CRC32 + chunk_size + chunk_data × N
+4. Start program: `0x1E 0x00 0x00` (ProgramFlowRequest)
 
-**Part 1: Upload a Python controller program to the hub**
-1. Clear slot: Send `0x46 0x00` (ClearSlotRequest)
-2. Start file upload: Send `0x0C` + filename + slot + CRC32 (StartFileUploadRequest)
-3. Transfer chunks: Send `0x10` + running_CRC32 + chunk_size + chunk_data (TransferChunkRequest) x N
-4. Start program: Send `0x1E 0x00 0x00` (ProgramFlowRequest)
+**On reconnect to the same hub:** the upload is skipped — a ProgramFlow probe is sent directly and the hub restarts the cached program (saves ~3–4 s).
 
-**Part 2: Real-time control via TunnelMessage**
-1. Send commands: `0x32` + payload_size(2 bytes) + command_data (TunnelMessage)
-2. Receive responses: Hub-side program sends back data via `tunnel.send()`
-3. Hub-side Python uses `hub.config['module_tunnel']` for bidirectional communication
+### 4.2 SSP message format
+Commands are UTF-8 JSON newline-terminated strings wrapped in TunnelMessage:
 
-### 4.3 Hub-Side Python Program
-The extension must embed a Python controller program that runs on the hub. The hub-side program receives commands via the tunnel callback and controls motors, LEDs, and sensors accordingly. It sends acknowledgments and sensor data back via `tunnel.send()`.
+```
+{"cmd":"motor.run","port":"A","speed":75}\n
+{"cmd":"sensor.read","port":"C","type":"color"}\n
+{"cmd":"system.ping"}\n
+```
 
-Key hub-side API:
-- `hub.config['module_tunnel']` - Access the tunnel module
-- `tunnel.callback(handler_function)` - Register callback for incoming messages
-- `tunnel.send(bytes)` - Send data back to the connected device
-- `motor.run(port.X, speed)` - Control motor on port X
-- `light_matrix.set_pixel(x, y, brightness)` - Control LED matrix
+Responses from the hub are the same format:
+
+```
+{"type":"capability","device":"spike-prime","ssp_version":"0.6","ports":[...]}\n
+{"event":"sensor","port":"C","type":"color","value":"red"}\n
+{"event":"pong"}\n
+```
+
+### 4.3 Hub-side Python (`src/resources/hub_controller.py`)
+The Python program runs on the hub, parses incoming SSP JSON via `json.loads()`, and dispatches to motor, LED, sensor, and system handlers. It sends a capability declaration on startup and responds to heartbeat pings every 5 s.
+
+Key hub-side API used:
+- `hub.config['module_tunnel']` — tunnel module access
+- `tunnel.callback(fn)` — register SSP command handler
+- `tunnel.send(bytes)` — send SSP events back to client
+- `motor.run(port, velocity)` — motor at –1100 to +1100 deg/s (speed × 11)
+- `motor_pair.move(PAIR_1, steering, velocity=v)` — coordinated drive base
+- `light_matrix.set_pixel(x, y, brightness)` — 5×5 LED matrix
 
 ### 4.4 COBS Encoding Constants (Verified from Working Implementation)
 
@@ -120,7 +132,7 @@ Key hub-side API:
 - The hub-side Python program needs to be designed and embedded
 - COBSEncoder.java constants MUST be verified against the values in Section 4.4
 
-**Rule for Claude Code:** Before implementing any motor/LED/sensor control, you MUST use the TunnelMessage approach. Direct BLE commands for hardware control do NOT work on SPIKE Prime 3.x.
+**Rule for Claude Code:** All motor/LED/sensor control goes through `sendSSP(SSPMessage)` in `LegoSpikeConnectivity`. Never use `sendCommand(String)` with custom strings. The wire format is SSP v0.6 JSON — see CLAUDE.md Rule 5 and `docs/SSP_BRIDGE_GUIDE.md`.
 
 ## 5. BLE Connection Mechanism (Critical — Discovered April 2026)
 

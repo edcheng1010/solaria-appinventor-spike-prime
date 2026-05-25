@@ -1081,6 +1081,54 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
     public String ConnectedDeviceAddress() { return connectedDeviceAddress; }
 
     // =========================================================================
+    // SSP capability queries (populated after OnCapabilityReceived fires)
+    // =========================================================================
+
+    @SimpleFunction(description =
+        "Returns the hardware type string reported by the hub in its capability "
+        + "declaration (e.g. 'spike-prime'). Empty before OnCapabilityReceived fires.")
+    public String GetDeviceType() {
+        String t = capabilityStore.getDeviceType();
+        return t != null ? t : "";
+    }
+
+    @SimpleFunction(description =
+        "Returns a comma-separated list of all port IDs declared by the hub "
+        + "(e.g. 'A,B,display,status,imu,speaker'). Empty before OnCapabilityReceived fires.")
+    public String GetAvailablePorts() {
+        java.util.List<String> ids = capabilityStore.getPortIds();
+        if (ids.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < ids.size(); i++) {
+            if (i > 0) sb.append(',');
+            sb.append(ids.get(i));
+        }
+        return sb.toString();
+    }
+
+    @SimpleFunction(description =
+        "Returns a comma-separated list of payload encodings supported by the hub "
+        + "(e.g. 'json-utf8-newline'). Empty before OnCapabilityReceived fires.")
+    public String GetSupportedEncodings() {
+        java.util.List<String> enc = capabilityStore.getEncodings();
+        if (enc.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < enc.size(); i++) {
+            if (i > 0) sb.append(',');
+            sb.append(enc.get(i));
+        }
+        return sb.toString();
+    }
+
+    @SimpleFunction(description =
+        "Returns the SSP version string reported by the hub (e.g. '0.6'). "
+        + "Empty before OnCapabilityReceived fires.")
+    public String GetSSPVersion() {
+        String v = capabilityStore.getSspVersion();
+        return v != null ? v : "";
+    }
+
+    // =========================================================================
     // Scanning
     // =========================================================================
     @SimpleFunction(description = "Start scanning for LEGO SPIKE Prime hubs")

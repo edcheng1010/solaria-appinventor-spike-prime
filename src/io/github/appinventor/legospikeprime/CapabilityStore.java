@@ -41,6 +41,7 @@ public class CapabilityStore {
     private String sspVersion;
     private boolean supportsBatch;
     private List<String> systemMetrics = Collections.emptyList();
+    private List<String> encodings     = Collections.emptyList();
     private Map<String, PortInfo> ports = new HashMap<>();
     private boolean loaded   = false;
     private boolean received = false; // signals waitForCapability()
@@ -55,6 +56,7 @@ public class CapabilityStore {
         sspVersion = null;
         supportsBatch = false;
         systemMetrics = Collections.emptyList();
+        encodings     = Collections.emptyList();
         loaded   = false;
         received = false;
         notifyAll(); // wake any thread stuck in waitForCapability after a clear
@@ -86,6 +88,13 @@ public class CapabilityStore {
             List<String> list = new ArrayList<>();
             for (int i = 0; i < metrics.length(); i++) list.add(metrics.optString(i));
             systemMetrics = Collections.unmodifiableList(list);
+        }
+
+        JSONArray enc = capability.optJSONArray("encodings");
+        if (enc != null) {
+            List<String> list = new ArrayList<>();
+            for (int i = 0; i < enc.length(); i++) list.add(enc.optString(i));
+            encodings = Collections.unmodifiableList(list);
         }
 
         JSONArray portArray = capability.optJSONArray("ports");
@@ -141,10 +150,16 @@ public class CapabilityStore {
     // Top-level queries
     // -----------------------------------------------------------------------
 
-    public String getDeviceType()    { return deviceType; }
-    public String getSspVersion()    { return sspVersion; }
-    public boolean supportsBatch()   { return supportsBatch; }
+    public String getDeviceType()          { return deviceType; }
+    public String getSspVersion()          { return sspVersion; }
+    public boolean supportsBatch()         { return supportsBatch; }
     public List<String> getSystemMetrics() { return systemMetrics; }
+    public List<String> getEncodings()     { return encodings; }
+
+    /** Returns an unmodifiable list of all declared port IDs in declaration order. */
+    public synchronized List<String> getPortIds() {
+        return Collections.unmodifiableList(new ArrayList<>(ports.keySet()));
+    }
 
     // -----------------------------------------------------------------------
     // Port queries

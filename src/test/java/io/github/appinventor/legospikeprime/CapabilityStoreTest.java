@@ -23,6 +23,7 @@ public class CapabilityStoreTest {
         return new JSONObject()
             .put("type", "capability")
             .put("device", "spike-prime")
+            .put("encodings", new JSONArray().put("json-utf8-newline"))
             .put("firmware", "3.4.0")
             .put("ssp_version", "0.6")
             .put("encodings", new JSONArray().put("json-utf8-newline"))
@@ -300,5 +301,49 @@ public class CapabilityStoreTest {
     @Test
     public void unloadedStore_getDeviceTypeReturnsNull() {
         assertNull(new CapabilityStore().getDeviceType());
+    }
+
+    // -----------------------------------------------------------------------
+    // getPortIds() — used by GetAvailablePorts() block
+    // -----------------------------------------------------------------------
+
+    @Test
+    public void getPortIds_returnsAllDeclaredPortIds() {
+        java.util.List<String> ids = store.getPortIds();
+        assertNotNull(ids);
+        assertTrue(ids.contains("A"));
+        assertTrue(ids.contains("display"));
+        assertTrue(ids.contains("status"));
+        assertTrue(ids.contains("imu"));
+        assertTrue(ids.contains("speaker"));
+        assertEquals(5, ids.size());
+    }
+
+    @Test
+    public void getPortIds_returnsEmptyListWhenUnloaded() {
+        assertTrue(new CapabilityStore().getPortIds().isEmpty());
+    }
+
+    @Test
+    public void getPortIds_returnsEmptyAfterClear() {
+        store.clear();
+        assertTrue(store.getPortIds().isEmpty());
+    }
+
+    // -----------------------------------------------------------------------
+    // getEncodings() — used by GetSupportedEncodings() block
+    // -----------------------------------------------------------------------
+
+    @Test
+    public void getEncodings_returnsDeclaredEncodings() {
+        java.util.List<String> enc = store.getEncodings();
+        assertNotNull(enc);
+        assertTrue(enc.contains("json-utf8-newline"));
+        assertEquals(1, enc.size());
+    }
+
+    @Test
+    public void getEncodings_returnsEmptyListWhenUnloaded() {
+        assertTrue(new CapabilityStore().getEncodings().isEmpty());
     }
 }
