@@ -329,18 +329,18 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "                    continue\n" +
         "        return None\n" +
         "    if sensor_type == 'speed':\n" +
-        "        # motor.velocity returns deg/s (divide by 11 for percent)\n" +
+        "        # motor.speed() returns 0-8 on SPIKE 3.x firmware (8 = 100%) — scale to percent\n" +
+        "        fn = getattr(motor, 'speed', None)\n" +
+        "        if fn is not None:\n" +
+        "            try:\n" +
+        "                return int(fn(p) * 12.5)\n" +
+        "            except Exception:\n" +
+        "                pass\n" +
+        "        # motor.velocity returns deg/s on some FW versions (divide by 11 for percent)\n" +
         "        fn = getattr(motor, 'velocity', None) or getattr(motor, 'get_velocity', None)\n" +
         "        if fn is not None:\n" +
         "            try:\n" +
         "                return int(fn(p) / 11)\n" +
-        "            except Exception:\n" +
-        "                pass\n" +
-        "        # motor.speed returns percent directly (don't divide)\n" +
-        "        fn = getattr(motor, 'speed', None)\n" +
-        "        if fn is not None:\n" +
-        "            try:\n" +
-        "                return int(fn(p))\n" +
         "            except Exception:\n" +
         "                pass\n" +
         "        return None\n" +
@@ -1082,7 +1082,7 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "# Run when executed on the hub (MicroPython treats this as __main__)\n" +
         "if __name__ == '__main__':\n" +
         "    start()\n" +
-        "\n";
+        "";
 
 
     // Stable hash of HUB_CONTROLLER_PROGRAM — declared after the constant to avoid
