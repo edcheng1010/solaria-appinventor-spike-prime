@@ -7,12 +7,13 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 /**
- * Caches the SSP v0.6 capability declaration received from the bridge on
+ * Caches the SSP v0.8 capability declaration received from the bridge on
  * connection. Provides typed query methods for ports, features, constraints,
  * display dimensions, and speaker sounds.
  *
@@ -42,7 +43,7 @@ public class CapabilityStore {
     private boolean supportsBatch;
     private List<String> systemMetrics = Collections.emptyList();
     private List<String> encodings     = Collections.emptyList();
-    private Map<String, PortInfo> ports = new HashMap<>();
+    private Map<String, PortInfo> ports = new LinkedHashMap<>(); // preserves declaration order
     private boolean loaded   = false;
     private boolean received = false; // signals waitForCapability()
 

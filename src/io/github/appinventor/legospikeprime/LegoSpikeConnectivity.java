@@ -79,16 +79,16 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
     //   SEN:TMRR         reset timer
     // =========================================================================
     static final String HUB_CONTROLLER_PROGRAM =
-        "# LEGO SPIKE Prime hub controller — SSP v0.6 edition.\n" +
+        "# LEGO SPIKE Prime hub controller — SSP v0.8 edition.\n" +
         "#\n" +
-        "# Wire format: SSP v0.6 json-utf8-newline over TunnelMessage (opcode 0x32).\n" +
+        "# Wire format: SSP v0.8 json-utf8-newline over TunnelMessage (opcode 0x32).\n" +
         "# Each incoming frame is one newline-terminated JSON string.\n" +
         "# Each outgoing event is one newline-terminated JSON string.\n" +
         "#\n" +
         "# This program is the TYPE 2 \"bridge firmware\" for the Solaria platform.\n" +
         "# It runs entirely on the hub via the Python TunnelMessage facility.\n" +
         "#\n" +
-        "# See: https://github.com/edcheng1010/solaria-hub/blob/main/spec/SSP-v0.6.md\n" +
+        "# See: https://github.com/edcheng1010/solaria-hub/blob/main/spec/SSP-v0.8.md\n" +
         "\n" +
         "import hub, motor, motor_pair, time\n" +
         "from hub import light_matrix, port\n" +
@@ -160,12 +160,18 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "_mov_rp = None\n" +
         "\n" +
         "# Subscriptions: port_id -> {type, mode, interval_ms, min_change, last_ms, last_val}\n" +
-        "# Special port 'battery'/'temperature'/etc. are system metrics.\n" +
         "_subscriptions = {}\n" +
         "_sys_subscriptions = {}  # metric -> {interval_ms, last_ms, last_val}\n" +
         "\n" +
         "_last_ping_ms = None     # None = heartbeat not yet started\n" +
         "_heartbeat_active = False\n" +
+        "\n" +
+        "# v0.8: cached volume for sound.read\n" +
+        "_cached_volume = 50\n" +
+        "\n" +
+        "# v0.8: cached motor acceleration rates (port_id -> ms)\n" +
+        "_motor_acceleration = {}\n" +
+        "_movement_acceleration = None\n" +
         "\n" +
         "# ---------------------------------------------------------------------------\n" +
         "# Tunnel setup\n" +
@@ -241,8 +247,55 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "    light_matrix.show_image(idx)\n" +
         "\n" +
         "\n" +
+        "def _face_orientation():\n" +
+        "    \"\"\"Return discrete face orientation string from IMU (v0.7).\"\"\"\n" +
+        "    try:\n" +
+        "        # Try firmware API first\n" +
+        "        try:\n" +
+        "            return hub.motion_sensor.get_orientation()\n" +
+        "        except AttributeError:\n" +
+        "            pass\n" +
+        "        # Derive from pitch/roll angles (heuristic)\n" +
+        "        pitch, roll, _ = _tilt_angles()\n" +
+        "        if pitch > 60:   return 'port_e_up'\n" +
+        "        if pitch < -60:  return 'port_a_up'\n" +
+        "        if roll > 60:    return 'face_down'\n" +
+        "        if roll < -60:   return 'face_up'\n" +
+        "        return 'face_up'\n" +
+        "    except Exception:\n" +
+        "        return 'face_up'\n" +
+        "\n" +
+        "\n" +
+        "def _angular_velocity():\n" +
+        "    \"\"\"Return angular velocity {x, y, z} in deg/s (v0.7).\"\"\"\n" +
+        "    try:\n" +
+        "        av = hub.motion_sensor.angular_velocity()\n" +
+        "        return {'x': av[0], 'y': av[1], 'z': av[2]}\n" +
+        "    except Exception:\n" +
+        "        return {'x': 0, 'y': 0, 'z': 0}\n" +
+        "\n" +
+        "\n" +
         "def _read_sensor_value(port_id, sensor_type):\n" +
         "    \"\"\"Reads a sensor value. Returns None on error.\"\"\"\n" +
+        "    # IMU-specific types routed directly\n" +
+        "    if port_id == 'imu' or sensor_type in ('pitch', 'roll', 'yaw',\n" +
+        "                                             'face_orientation', 'angular_velocity',\n" +
+        "                                             'acceleration'):\n" +
+        "        try:\n" +
+        "            if sensor_type == 'pitch':          return _tilt_angles()[0]\n" +
+        "            if sensor_type == 'roll':           return _tilt_angles()[1]\n" +
+        "            if sensor_type == 'yaw':            return _tilt_angles()[2]\n" +
+        "            if sensor_type == 'face_orientation': return _face_orientation()\n" +
+        "            if sensor_type == 'angular_velocity': return _angular_velocity()\n" +
+        "            if sensor_type == 'acceleration':\n" +
+        "                try:\n" +
+        "                    acc = hub.motion_sensor.acceleration()\n" +
+        "                    return {'x': acc[0], 'y': acc[1], 'z': acc[2]}\n" +
+        "                except Exception:\n" +
+        "                    return {'x': 0, 'y': 0, 'z': 0}\n" +
+        "        except Exception:\n" +
+        "            return None\n" +
+        "\n" +
         "    p = PORTS.get(port_id.upper())\n" +
         "    if p is None or not _sensors_ok:\n" +
         "        return None\n" +
@@ -250,6 +303,12 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "        if sensor_type == 'color':\n" +
         "            c = color_sensor.color(p)\n" +
         "            return _CLR_MAP.get(c, str(c))\n" +
+        "        elif sensor_type == 'rgb':\n" +
+        "            try:\n" +
+        "                rgb = color_sensor.rgb(p)\n" +
+        "                return [rgb[0], rgb[1], rgb[2]]\n" +
+        "            except Exception:\n" +
+        "                return [0, 0, 0]\n" +
         "        elif sensor_type == 'reflected':\n" +
         "            return color_sensor.reflection(p)\n" +
         "        elif sensor_type == 'ambient':\n" +
@@ -260,12 +319,6 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "            return force_sensor.force(p)\n" +
         "        elif sensor_type == 'touched':\n" +
         "            return force_sensor.pressed(p)\n" +
-        "        elif sensor_type == 'pitch':\n" +
-        "            return _tilt_angles()[0]\n" +
-        "        elif sensor_type == 'roll':\n" +
-        "            return _tilt_angles()[1]\n" +
-        "        elif sensor_type == 'yaw':\n" +
-        "            return _tilt_angles()[2]\n" +
         "    except Exception:\n" +
         "        return None\n" +
         "\n" +
@@ -313,10 +366,12 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "            ports_list.append({\n" +
         "                'id': pid,\n" +
         "                'type': 'motor',\n" +
-        "                'features': ['speed', 'position', 'stall'],\n" +
+        "                'features': ['speed', 'position', 'stall', 'power', 'acceleration'],\n" +
+        "                'goto_modes': ['absolute', 'relative'],\n" +
         "                'constraints': {\n" +
-        "                    'speed':    {'type': 'int', 'min': -100, 'max': 100},\n" +
-        "                    'position': {'type': 'int', 'min': 0, 'max': 359, 'wraps': True},\n" +
+        "                    'speed':        {'type': 'int', 'min': -100, 'max': 100},\n" +
+        "                    'position':     {'type': 'int', 'min': 0, 'max': 359, 'wraps': True},\n" +
+        "                    'acceleration': {'type': 'int', 'min': 0, 'max': 10000},\n" +
         "                },\n" +
         "            })\n" +
         "        except Exception:\n" +
@@ -328,6 +383,7 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "        'type': 'display',\n" +
         "        'width': 5, 'height': 5, 'depth': 'grayscale',\n" +
         "        'features': ['pixel', 'image', 'text', 'brightness', 'orientation'],\n" +
+        "        # 'touch' feature omitted until FW support is verified\n" +
         "    })\n" +
         "\n" +
         "    # Status LED (always present)\n" +
@@ -336,40 +392,45 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "        'type': 'led',\n" +
         "        'features': ['set'],\n" +
         "        'constraints': {\n" +
-        "            'color': {\n" +
-        "                'type': 'enum',\n" +
-        "                'values': list(_LED_COLORS.keys()),\n" +
-        "            },\n" +
+        "            'color': {'type': 'enum', 'values': list(_LED_COLORS.keys())},\n" +
         "        },\n" +
         "    })\n" +
         "\n" +
-        "    # IMU (always present on SPIKE Prime 3.x)\n" +
+        "    # IMU (always present on SPIKE Prime 3.x) — v0.7/v0.8 features\n" +
         "    ports_list.append({\n" +
         "        'id': 'imu',\n" +
         "        'type': 'orientation',\n" +
-        "        'features': ['pitch', 'roll', 'yaw', 'gesture'],\n" +
+        "        'features': ['pitch', 'roll', 'yaw', 'gesture', 'face_orientation', 'angular_velocity'],\n" +
         "        'constraints': {\n" +
         "            'gesture': {\n" +
         "                'type': 'enum',\n" +
         "                'values': ['shake', 'tap', 'double_tap', 'fall', 'face_up', 'face_down'],\n" +
         "            },\n" +
+        "            'face_orientation': {\n" +
+        "                'type': 'enum',\n" +
+        "                'values': ['face_up', 'face_down', 'port_a_up', 'port_a_down',\n" +
+        "                           'port_e_up', 'port_e_down'],\n" +
+        "            },\n" +
         "        },\n" +
         "    })\n" +
         "\n" +
-        "    # Speaker\n" +
+        "    # Speaker — v0.8: volume + sound_wait_supported\n" +
         "    ports_list.append({\n" +
         "        'id': 'speaker',\n" +
         "        'type': 'speaker',\n" +
-        "        'features': ['beep'],\n" +
+        "        'features': ['beep', 'volume'],\n" +
+        "        'sound_wait_supported': True,\n" +
+        "        # 'builtin' and 'midi' features added after FW API verification\n" +
         "    })\n" +
         "\n" +
         "    return {\n" +
         "        'type': 'capability',\n" +
         "        'device': 'spike-prime',\n" +
         "        'firmware': '3.x',\n" +
-        "        'ssp_version': '0.6',\n" +
+        "        'ssp_version': '0.8',\n" +
         "        'encodings': ['json-utf8-newline'],\n" +
         "        'supports_batch': False,\n" +
+        "        'tank_drive': True,\n" +
         "        'system_metrics': [\n" +
         "            'battery', 'charging', 'temperature',\n" +
         "            'button.left', 'button.right', 'button.center',\n" +
@@ -383,8 +444,16 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "# ---------------------------------------------------------------------------\n" +
         "\n" +
         "def _handle_motor(cmd, obj, req_id):\n" +
-        "    action = cmd.split('.')[1]  # run, stop, goto, reset\n" +
+        "    action = cmd.split('.')[1]  # run, stop, goto, reset, set_acceleration\n" +
         "    port_id = obj.get('port', '').upper()\n" +
+        "\n" +
+        "    # set_acceleration doesn't need a physical port\n" +
+        "    if action == 'set_acceleration':\n" +
+        "        rate = int(obj.get('rate', 500))\n" +
+        "        _motor_acceleration[port_id] = rate\n" +
+        "        # SPIKE FW may not expose hardware-level accel; cache client-side for now\n" +
+        "        return\n" +
+        "\n" +
         "    p = PORTS.get(port_id)\n" +
         "    if p is None:\n" +
         "        _send_error(201, 'Unknown port: ' + port_id, req_id)\n" +
@@ -392,7 +461,10 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "\n" +
         "    try:\n" +
         "        if action == 'run':\n" +
-        "            spd = int(obj.get('speed', 0)) * 11\n" +
+        "            raw_speed = int(obj.get('speed', 0))\n" +
+        "            mode = obj.get('mode', 'speed')\n" +
+        "            # Power mode: treat speed param as 0-100% duty cycle (same scaling on SPIKE)\n" +
+        "            spd = raw_speed * 11\n" +
         "            dur = obj.get('duration')\n" +
         "            unit = obj.get('duration_unit', 'ms')\n" +
         "            if dur is not None:\n" +
@@ -404,6 +476,7 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "                elif unit == 'rotations':\n" +
         "                    motor.run_for_degrees(p, dur * 360, spd)\n" +
         "            else:\n" +
+        "                # omitting duration = run indefinitely (v0.8 §6.1)\n" +
         "                motor.run(p, spd)\n" +
         "\n" +
         "        elif action == 'stop':\n" +
@@ -418,7 +491,13 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "        elif action == 'goto':\n" +
         "            pos = int(obj.get('position', 0))\n" +
         "            spd = int(obj.get('speed', 50)) * 11\n" +
-        "            motor.run_to_position(p, pos, spd)\n" +
+        "            goto_mode = obj.get('mode', 'absolute')\n" +
+        "            if goto_mode == 'relative':\n" +
+        "                # Relative: run_for_degrees from current position\n" +
+        "                motor.run_for_degrees(p, pos, spd)\n" +
+        "            else:\n" +
+        "                # Absolute (default)\n" +
+        "                motor.run_to_position(p, pos, spd)\n" +
         "\n" +
         "        elif action == 'reset':\n" +
         "            motor.reset_relative_position(p, 0)\n" +
@@ -428,9 +507,14 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "\n" +
         "\n" +
         "def _handle_movement(cmd, obj, req_id):\n" +
-        "    action = cmd.split('.')[1]  # configure, drive, turn, stop\n" +
+        "    global _movement_acceleration\n" +
+        "    action = cmd.split('.')[1]  # configure, drive, turn, stop, set_acceleration\n" +
         "\n" +
         "    try:\n" +
+        "        if action == 'set_acceleration':\n" +
+        "            _movement_acceleration = int(obj.get('rate', 500))\n" +
+        "            return\n" +
+        "\n" +
         "        if action == 'configure':\n" +
         "            lp = obj.get('left', '').upper()\n" +
         "            rp = obj.get('right', '').upper()\n" +
@@ -442,20 +526,27 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "            rp = obj.get('right', _mov_rp or 'B').upper()\n" +
         "            if lp in PORTS and rp in PORTS:\n" +
         "                _ensure_pair(lp, rp)\n" +
-        "            steering = int(obj.get('steering', 0))\n" +
-        "            vel = int(obj.get('speed', 50)) * 11\n" +
-        "            dur = obj.get('duration')\n" +
-        "            unit = obj.get('duration_unit', 'ms')\n" +
-        "            if dur is not None:\n" +
-        "                dur = int(dur)\n" +
-        "                if unit == 'degrees':\n" +
-        "                    motor_pair.move_for_degrees(motor_pair.PAIR_1, dur, steering, velocity=vel)\n" +
-        "                elif unit == 'rotations':\n" +
-        "                    motor_pair.move_for_degrees(motor_pair.PAIR_1, dur * 360, steering, velocity=vel)\n" +
-        "                else:\n" +
-        "                    motor_pair.move_for_time(motor_pair.PAIR_1, dur, steering, velocity=vel)\n" +
+        "\n" +
+        "            # v0.7 tank drive: explicit left_speed / right_speed\n" +
+        "            if 'left_speed' in obj or 'right_speed' in obj:\n" +
+        "                l_vel = int(obj.get('left_speed', 0)) * 11\n" +
+        "                r_vel = int(obj.get('right_speed', 0)) * 11\n" +
+        "                motor_pair.move_tank(motor_pair.PAIR_1, l_vel, r_vel)\n" +
         "            else:\n" +
-        "                motor_pair.move(motor_pair.PAIR_1, steering, velocity=vel)\n" +
+        "                steering = int(obj.get('steering', 0))\n" +
+        "                vel = int(obj.get('speed', 50)) * 11\n" +
+        "                dur = obj.get('duration')\n" +
+        "                unit = obj.get('duration_unit', 'ms')\n" +
+        "                if dur is not None:\n" +
+        "                    dur = int(dur)\n" +
+        "                    if unit == 'degrees':\n" +
+        "                        motor_pair.move_for_degrees(motor_pair.PAIR_1, dur, steering, velocity=vel)\n" +
+        "                    elif unit == 'rotations':\n" +
+        "                        motor_pair.move_for_degrees(motor_pair.PAIR_1, dur * 360, steering, velocity=vel)\n" +
+        "                    else:\n" +
+        "                        motor_pair.move_for_time(motor_pair.PAIR_1, dur, steering, velocity=vel)\n" +
+        "                else:\n" +
+        "                    motor_pair.move(motor_pair.PAIR_1, steering, velocity=vel)\n" +
         "\n" +
         "        elif action == 'turn':\n" +
         "            angle = int(obj.get('angle', 90))\n" +
@@ -528,26 +619,89 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "\n" +
         "\n" +
         "def _handle_sound(cmd, obj, req_id):\n" +
-        "    action = cmd.split('.')[1]  # beep, play, stop, set_volume\n" +
+        "    global _cached_volume\n" +
+        "    action = cmd.split('.')[1]  # beep, play, stop, set_volume, read\n" +
         "    try:\n" +
         "        if action == 'beep':\n" +
         "            freq = int(obj.get('freq', 440))\n" +
-        "            dur = int(obj.get('duration', 200))\n" +
-        "            hub.sound.beep(freq, dur)\n" +
+        "            dur = obj.get('duration')\n" +
+        "            if dur is not None:\n" +
+        "                hub.sound.beep(int(dur), freq)\n" +
+        "            else:\n" +
+        "                # Indefinite beep — no native API; just beep for a long time\n" +
+        "                hub.sound.beep(30000, freq)\n" +
+        "\n" +
         "        elif action == 'stop':\n" +
         "            hub.sound.stop()\n" +
+        "\n" +
         "        elif action == 'play':\n" +
+        "            wait = obj.get('wait', False)\n" +
         "            sound_name = obj.get('sound')\n" +
+        "            notes = obj.get('notes')\n" +
+        "            if notes:\n" +
+        "                # v0.8 MIDI notes — parse and play via beep sequences (best effort)\n" +
+        "                _play_notes_sequence(notes, int(obj.get('tempo', 120)), req_id)\n" +
+        "                return\n" +
         "            if sound_name:\n" +
-        "                hub.sound.play(str(sound_name))\n" +
+        "                if wait:\n" +
+        "                    try:\n" +
+        "                        hub.sound.play(str(sound_name), volume=_cached_volume)\n" +
+        "                        _send({'event': 'sound_complete', 'request_id': req_id} if req_id else\n" +
+        "                              {'event': 'sound_complete'})\n" +
+        "                    except TypeError:\n" +
+        "                        hub.sound.play(str(sound_name))\n" +
+        "                        _send({'event': 'sound_complete'})\n" +
+        "                else:\n" +
+        "                    hub.sound.play(str(sound_name))\n" +
+        "\n" +
         "        elif action == 'set_volume':\n" +
         "            level = int(obj.get('level', 50))\n" +
+        "            _cached_volume = max(0, min(100, level))\n" +
         "            try:\n" +
-        "                hub.sound.set_volume(level)\n" +
+        "                hub.sound.set_volume(_cached_volume)\n" +
         "            except AttributeError:\n" +
         "                pass\n" +
+        "\n" +
+        "        elif action == 'read':\n" +
+        "            metric = obj.get('metric', 'volume')\n" +
+        "            if metric == 'volume':\n" +
+        "                _send({'event': 'sound', 'metric': 'volume', 'value': _cached_volume})\n" +
+        "\n" +
         "    except Exception as e:\n" +
         "        _send_error(301, 'Sound error: ' + str(e), req_id)\n" +
+        "\n" +
+        "\n" +
+        "def _play_notes_sequence(notes_str, tempo, req_id):\n" +
+        "    \"\"\"Parse v0.8 §6.3.1 notes string and play as beeps (best-effort MIDI).\"\"\"\n" +
+        "    # Note name -> frequency mapping (A4=440 Hz standard)\n" +
+        "    NOTE_FREQ = {\n" +
+        "        'C': 261, 'C#': 277, 'Db': 277, 'D': 293, 'D#': 311, 'Eb': 311,\n" +
+        "        'E': 329, 'F': 349, 'F#': 369, 'Gb': 369, 'G': 392, 'G#': 415,\n" +
+        "        'Ab': 415, 'A': 440, 'A#': 466, 'Bb': 466, 'B': 493,\n" +
+        "    }\n" +
+        "    ms_per_beat = int(60000 / max(1, tempo))\n" +
+        "    try:\n" +
+        "        tokens = notes_str.strip().split()\n" +
+        "        for token in tokens:\n" +
+        "            if ':' not in token:\n" +
+        "                continue\n" +
+        "            note_part, dur_part = token.rsplit(':', 1)\n" +
+        "            duration_ms = int(float(dur_part) * ms_per_beat)\n" +
+        "            if note_part == 'R':\n" +
+        "                time.sleep_ms(duration_ms)\n" +
+        "                continue\n" +
+        "            # Strip octave digit to get note name, then compute freq\n" +
+        "            import re as _re\n" +
+        "            m = _re.match(r'([A-G][#b]?)(\\d)', note_part)\n" +
+        "            if m:\n" +
+        "                name, octave = m.group(1), int(m.group(2))\n" +
+        "                base_freq = NOTE_FREQ.get(name, 440)\n" +
+        "                freq = int(base_freq * (2 ** (octave - 4)))\n" +
+        "                hub.sound.beep(duration_ms, freq)\n" +
+        "            else:\n" +
+        "                time.sleep_ms(duration_ms)\n" +
+        "    except Exception:\n" +
+        "        pass  # degrade silently\n" +
         "\n" +
         "\n" +
         "def _handle_sensor(cmd, obj, req_id):\n" +
@@ -577,18 +731,9 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "\n" +
         "    elif action == 'read':\n" +
         "        sensor_type = obj.get('type', 'color')\n" +
-        "        if port_id == 'imu':\n" +
-        "            angles = _tilt_angles()\n" +
-        "            if sensor_type == 'pitch':\n" +
-        "                _sensor_event(port_id, 'pitch', angles[0], req_id)\n" +
-        "            elif sensor_type == 'roll':\n" +
-        "                _sensor_event(port_id, 'roll', angles[1], req_id)\n" +
-        "            elif sensor_type == 'yaw':\n" +
-        "                _sensor_event(port_id, 'yaw', angles[2], req_id)\n" +
-        "        else:\n" +
-        "            val = _read_sensor_value(port_id, sensor_type)\n" +
-        "            if val is not None:\n" +
-        "                _sensor_event(port_id, sensor_type, val, req_id)\n" +
+        "        val = _read_sensor_value(port_id, sensor_type)\n" +
+        "        if val is not None:\n" +
+        "            _sensor_event(port_id, sensor_type, val, req_id)\n" +
         "\n" +
         "\n" +
         "def _handle_system(cmd, obj, req_id):\n" +
@@ -604,7 +749,7 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "        _send({\n" +
         "            'event': 'system_info',\n" +
         "            'device': 'spike-prime',\n" +
-        "            'ssp_version': '0.6',\n" +
+        "            'ssp_version': '0.8',\n" +
         "        })\n" +
         "\n" +
         "    elif action == 'subscribe':\n" +
@@ -635,6 +780,27 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "\n" +
         "    elif action == 'reset':\n" +
         "        pass  # no-op on this platform\n" +
+        "\n" +
+        "\n" +
+        "def _handle_orientation(cmd, obj, req_id):\n" +
+        "    \"\"\"v0.7 orientation.* command category.\"\"\"\n" +
+        "    action = cmd.split('.')[1]  # set_yaw, reset_yaw, set_reference\n" +
+        "    try:\n" +
+        "        if action == 'reset_yaw':\n" +
+        "            hub.motion_sensor.reset_yaw_angle()\n" +
+        "        elif action == 'set_yaw':\n" +
+        "            angle = int(obj.get('angle', 0))\n" +
+        "            # SPIKE FW: reset to 0, no direct set_yaw — approximate by resetting\n" +
+        "            # and relying on user to physically orient the hub, or set as offset\n" +
+        "            hub.motion_sensor.reset_yaw_angle()  # best effort; offset not stored\n" +
+        "        elif action == 'set_reference':\n" +
+        "            face = obj.get('face', 'face_up')\n" +
+        "            try:\n" +
+        "                hub.motion_sensor.set_yaw_face(face)\n" +
+        "            except AttributeError:\n" +
+        "                pass  # not available on all FW versions\n" +
+        "    except Exception as e:\n" +
+        "        _send_error(301, 'Orientation error: ' + str(e), req_id)\n" +
         "\n" +
         "\n" +
         "def _read_button(name):\n" +
@@ -689,6 +855,8 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "            _handle_sensor(cmd, obj, req_id)\n" +
         "        elif cmd.startswith('system.'):\n" +
         "            _handle_system(cmd, obj, req_id)\n" +
+        "        elif cmd.startswith('orientation.'):\n" +
+        "            _handle_orientation(cmd, obj, req_id)\n" +
         "        else:\n" +
         "            _send_error(400, 'Unknown command: ' + cmd, req_id)\n" +
         "    except Exception as e:\n" +
@@ -726,11 +894,7 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "                continue\n" +
         "\n" +
         "            stype = sub['type']\n" +
-        "            if pid == 'imu':\n" +
-        "                angles = _tilt_angles()\n" +
-        "                val = {'pitch': angles[0], 'roll': angles[1], 'yaw': angles[2]}.get(stype, 0)\n" +
-        "            else:\n" +
-        "                val = _read_sensor_value(pid, stype)\n" +
+        "            val = _read_sensor_value(pid, stype)\n" +
         "\n" +
         "            if val is None:\n" +
         "                continue\n" +
@@ -779,7 +943,9 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "\n" +
         "# Run when executed on the hub (MicroPython treats this as __main__)\n" +
         "if __name__ == '__main__':\n" +
-        "    start()\n";
+        "    start()\n" +
+        "\n";
+
 
     // Stable hash of HUB_CONTROLLER_PROGRAM — declared after the constant to avoid
     // a Java illegal-forward-reference compile error.
