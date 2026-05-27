@@ -515,16 +515,37 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "\n" +
         "        elif action == 'goto':\n" +
         "            pos = int(obj.get('position', 0))\n" +
-        "            spd = abs(int(obj.get('speed', 50))) * 11  # run_to_position needs positive velocity\n" +
+        "            spd = abs(int(obj.get('speed', 50))) * 11  # absolute-position calls need positive velocity\n" +
         "            goto_mode = obj.get('mode', 'absolute')\n" +
         "            if goto_mode == 'relative':\n" +
         "                motor.run_for_degrees(p, pos, spd)\n" +
         "            else:\n" +
-        "                # Absolute: SHORTEST_PATH direction (FW 3.x constant may vary)\n" +
-        "                try:\n" +
-        "                    motor.run_to_position(p, pos, spd, direction=motor.SHORTEST_PATH)\n" +
-        "                except TypeError:\n" +
-        "                    motor.run_to_position(p, pos, spd)\n" +
+        "                # Absolute goto — try multiple FW 3.x signatures, surface specific error.\n" +
+        "                direction = getattr(motor, 'SHORTEST_PATH', 0)\n" +
+        "                attempts = [\n" +
+        "                    # FW 3.x official: separate function, positional direction\n" +
+        "                    lambda: motor.run_to_absolute_position(p, pos, direction, spd),\n" +
+        "                    # FW variant: kwarg direction on run_to_position\n" +
+        "                    lambda: motor.run_to_position(p, pos, spd, direction=direction),\n" +
+        "                    # Older form (may no-op silently if FW expects direction)\n" +
+        "                    lambda: motor.run_to_position(p, pos, spd),\n" +
+        "                ]\n" +
+        "                success = False\n" +
+        "                last_err = None\n" +
+        "                for attempt in attempts:\n" +
+        "                    try:\n" +
+        "                        attempt()\n" +
+        "                        success = True\n" +
+        "                        break\n" +
+        "                    except (AttributeError, TypeError) as e:\n" +
+        "                        # Signature mismatch — try next form\n" +
+        "                        last_err = '%s: %s' % (type(e).__name__, str(e))\n" +
+        "                    except Exception as e:\n" +
+        "                        # Real runtime error — stop trying, report it\n" +
+        "                        last_err = '%s: %s' % (type(e).__name__, str(e))\n" +
+        "                        break\n" +
+        "                if not success:\n" +
+        "                    _send_error(301, 'goto failed: ' + (last_err or 'unknown'), req_id)\n" +
         "\n" +
         "        elif action == 'reset':\n" +
         "            motor.reset_relative_position(p, 0)\n" +

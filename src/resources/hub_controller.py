@@ -434,16 +434,37 @@ def _handle_motor(cmd, obj, req_id):
 
         elif action == 'goto':
             pos = int(obj.get('position', 0))
-            spd = abs(int(obj.get('speed', 50))) * 11  # run_to_position needs positive velocity
+            spd = abs(int(obj.get('speed', 50))) * 11  # absolute-position calls need positive velocity
             goto_mode = obj.get('mode', 'absolute')
             if goto_mode == 'relative':
                 motor.run_for_degrees(p, pos, spd)
             else:
-                # Absolute: SHORTEST_PATH direction (FW 3.x constant may vary)
-                try:
-                    motor.run_to_position(p, pos, spd, direction=motor.SHORTEST_PATH)
-                except TypeError:
-                    motor.run_to_position(p, pos, spd)
+                # Absolute goto — try multiple FW 3.x signatures, surface specific error.
+                direction = getattr(motor, 'SHORTEST_PATH', 0)
+                attempts = [
+                    # FW 3.x official: separate function, positional direction
+                    lambda: motor.run_to_absolute_position(p, pos, direction, spd),
+                    # FW variant: kwarg direction on run_to_position
+                    lambda: motor.run_to_position(p, pos, spd, direction=direction),
+                    # Older form (may no-op silently if FW expects direction)
+                    lambda: motor.run_to_position(p, pos, spd),
+                ]
+                success = False
+                last_err = None
+                for attempt in attempts:
+                    try:
+                        attempt()
+                        success = True
+                        break
+                    except (AttributeError, TypeError) as e:
+                        # Signature mismatch — try next form
+                        last_err = '%s: %s' % (type(e).__name__, str(e))
+                    except Exception as e:
+                        # Real runtime error — stop trying, report it
+                        last_err = '%s: %s' % (type(e).__name__, str(e))
+                        break
+                if not success:
+                    _send_error(301, 'goto failed: ' + (last_err or 'unknown'), req_id)
 
         elif action == 'reset':
             motor.reset_relative_position(p, 0)
