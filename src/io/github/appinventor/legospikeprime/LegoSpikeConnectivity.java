@@ -648,10 +648,15 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "                _ensure_pair(lp, rp)\n" +
         "\n" +
         "            # v0.7 tank drive: explicit left_speed / right_speed\n" +
+        "            accel = _movement_acceleration\n" +
+        "            accel_kw = {'acceleration': accel, 'deceleration': accel} if accel is not None else {}\n" +
         "            if 'left_speed' in obj or 'right_speed' in obj:\n" +
         "                l_vel = int(obj.get('left_speed', 0)) * 11\n" +
         "                r_vel = int(obj.get('right_speed', 0)) * 11\n" +
-        "                motor_pair.move_tank(motor_pair.PAIR_1, l_vel, r_vel)\n" +
+        "                try:\n" +
+        "                    motor_pair.move_tank(motor_pair.PAIR_1, l_vel, r_vel, **accel_kw)\n" +
+        "                except TypeError:\n" +
+        "                    motor_pair.move_tank(motor_pair.PAIR_1, l_vel, r_vel)\n" +
         "            else:\n" +
         "                steering = int(obj.get('steering', 0))\n" +
         "                vel = int(obj.get('speed', 50)) * 11\n" +
@@ -659,19 +664,35 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "                unit = obj.get('duration_unit', 'ms')\n" +
         "                if dur is not None:\n" +
         "                    dur = int(dur)\n" +
-        "                    if unit == 'degrees':\n" +
-        "                        motor_pair.move_for_degrees(motor_pair.PAIR_1, dur, steering, velocity=vel)\n" +
-        "                    elif unit == 'rotations':\n" +
-        "                        motor_pair.move_for_degrees(motor_pair.PAIR_1, dur * 360, steering, velocity=vel)\n" +
-        "                    else:\n" +
-        "                        motor_pair.move_for_time(motor_pair.PAIR_1, dur, steering, velocity=vel)\n" +
+        "                    try:\n" +
+        "                        if unit == 'degrees':\n" +
+        "                            motor_pair.move_for_degrees(motor_pair.PAIR_1, dur, steering, velocity=vel, **accel_kw)\n" +
+        "                        elif unit == 'rotations':\n" +
+        "                            motor_pair.move_for_degrees(motor_pair.PAIR_1, dur * 360, steering, velocity=vel, **accel_kw)\n" +
+        "                        else:\n" +
+        "                            motor_pair.move_for_time(motor_pair.PAIR_1, dur, steering, velocity=vel, **accel_kw)\n" +
+        "                    except TypeError:\n" +
+        "                        if unit == 'degrees':\n" +
+        "                            motor_pair.move_for_degrees(motor_pair.PAIR_1, dur, steering, velocity=vel)\n" +
+        "                        elif unit == 'rotations':\n" +
+        "                            motor_pair.move_for_degrees(motor_pair.PAIR_1, dur * 360, steering, velocity=vel)\n" +
+        "                        else:\n" +
+        "                            motor_pair.move_for_time(motor_pair.PAIR_1, dur, steering, velocity=vel)\n" +
         "                else:\n" +
-        "                    motor_pair.move(motor_pair.PAIR_1, steering, velocity=vel)\n" +
+        "                    try:\n" +
+        "                        motor_pair.move(motor_pair.PAIR_1, steering, velocity=vel, **accel_kw)\n" +
+        "                    except TypeError:\n" +
+        "                        motor_pair.move(motor_pair.PAIR_1, steering, velocity=vel)\n" +
         "\n" +
         "        elif action == 'turn':\n" +
         "            angle = int(obj.get('angle', 90))\n" +
         "            vel = int(obj.get('speed', 50)) * 11\n" +
-        "            motor_pair.move_for_degrees(motor_pair.PAIR_1, angle, 0, velocity=vel)\n" +
+        "            accel = _movement_acceleration\n" +
+        "            accel_kw = {'acceleration': accel, 'deceleration': accel} if accel is not None else {}\n" +
+        "            try:\n" +
+        "                motor_pair.move_for_degrees(motor_pair.PAIR_1, angle, 0, velocity=vel, **accel_kw)\n" +
+        "            except TypeError:\n" +
+        "                motor_pair.move_for_degrees(motor_pair.PAIR_1, angle, 0, velocity=vel)\n" +
         "\n" +
         "        elif action == 'stop':\n" +
         "            stop_action = obj.get('stop_action', 'brake')\n" +

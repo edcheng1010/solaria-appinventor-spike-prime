@@ -236,7 +236,7 @@ public class LegoSpikeMovement extends AndroidNonvisibleComponent {
 
     @SimpleFunction(description =
         "Set cm per full wheel rotation (used when MoveForDuration uses 'rotations' unit).")
-    public void SetMotorRotationDistance(double cmPerRotation) {
+    public void SetMovementRotationDistance(double cmPerRotation) {
         this.cmPerRotation = Math.max(0.1, cmPerRotation);
     }
 

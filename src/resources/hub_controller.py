@@ -567,10 +567,15 @@ def _handle_movement(cmd, obj, req_id):
                 _ensure_pair(lp, rp)
 
             # v0.7 tank drive: explicit left_speed / right_speed
+            accel = _movement_acceleration
+            accel_kw = {'acceleration': accel, 'deceleration': accel} if accel is not None else {}
             if 'left_speed' in obj or 'right_speed' in obj:
                 l_vel = int(obj.get('left_speed', 0)) * 11
                 r_vel = int(obj.get('right_speed', 0)) * 11
-                motor_pair.move_tank(motor_pair.PAIR_1, l_vel, r_vel)
+                try:
+                    motor_pair.move_tank(motor_pair.PAIR_1, l_vel, r_vel, **accel_kw)
+                except TypeError:
+                    motor_pair.move_tank(motor_pair.PAIR_1, l_vel, r_vel)
             else:
                 steering = int(obj.get('steering', 0))
                 vel = int(obj.get('speed', 50)) * 11
@@ -578,19 +583,35 @@ def _handle_movement(cmd, obj, req_id):
                 unit = obj.get('duration_unit', 'ms')
                 if dur is not None:
                     dur = int(dur)
-                    if unit == 'degrees':
-                        motor_pair.move_for_degrees(motor_pair.PAIR_1, dur, steering, velocity=vel)
-                    elif unit == 'rotations':
-                        motor_pair.move_for_degrees(motor_pair.PAIR_1, dur * 360, steering, velocity=vel)
-                    else:
-                        motor_pair.move_for_time(motor_pair.PAIR_1, dur, steering, velocity=vel)
+                    try:
+                        if unit == 'degrees':
+                            motor_pair.move_for_degrees(motor_pair.PAIR_1, dur, steering, velocity=vel, **accel_kw)
+                        elif unit == 'rotations':
+                            motor_pair.move_for_degrees(motor_pair.PAIR_1, dur * 360, steering, velocity=vel, **accel_kw)
+                        else:
+                            motor_pair.move_for_time(motor_pair.PAIR_1, dur, steering, velocity=vel, **accel_kw)
+                    except TypeError:
+                        if unit == 'degrees':
+                            motor_pair.move_for_degrees(motor_pair.PAIR_1, dur, steering, velocity=vel)
+                        elif unit == 'rotations':
+                            motor_pair.move_for_degrees(motor_pair.PAIR_1, dur * 360, steering, velocity=vel)
+                        else:
+                            motor_pair.move_for_time(motor_pair.PAIR_1, dur, steering, velocity=vel)
                 else:
-                    motor_pair.move(motor_pair.PAIR_1, steering, velocity=vel)
+                    try:
+                        motor_pair.move(motor_pair.PAIR_1, steering, velocity=vel, **accel_kw)
+                    except TypeError:
+                        motor_pair.move(motor_pair.PAIR_1, steering, velocity=vel)
 
         elif action == 'turn':
             angle = int(obj.get('angle', 90))
             vel = int(obj.get('speed', 50)) * 11
-            motor_pair.move_for_degrees(motor_pair.PAIR_1, angle, 0, velocity=vel)
+            accel = _movement_acceleration
+            accel_kw = {'acceleration': accel, 'deceleration': accel} if accel is not None else {}
+            try:
+                motor_pair.move_for_degrees(motor_pair.PAIR_1, angle, 0, velocity=vel, **accel_kw)
+            except TypeError:
+                motor_pair.move_for_degrees(motor_pair.PAIR_1, angle, 0, velocity=vel)
 
         elif action == 'stop':
             stop_action = obj.get('stop_action', 'brake')
