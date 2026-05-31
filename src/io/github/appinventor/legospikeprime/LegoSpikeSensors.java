@@ -287,9 +287,10 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
 
             if (!"sensor".equals(event)) return;
 
-            final String port = obj.optString("port");
-            final String type = obj.optString("type");
-            final Object val  = obj.opt("value");
+            final String port      = obj.optString("port");
+            final String type      = obj.optString("type");
+            final Object val       = obj.opt("value");
+            final boolean isOneShot = obj.has("request_id");
 
             switch (type) {
                 case "color": {
@@ -351,10 +352,11 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
                 }
                 case "face_orientation": {
                     final String fo = val != null ? val.toString() : "";
-                    mainHandler.post(() -> {
-                        HubFaceOrientationRead(fo);
-                        HubFaceOrientationChanged(fo);
-                    });
+                    if (isOneShot) {
+                        mainHandler.post(() -> HubFaceOrientationRead(fo));
+                    } else {
+                        mainHandler.post(() -> HubFaceOrientationChanged(fo));
+                    }
                     break;
                 }
                 case "gesture": {

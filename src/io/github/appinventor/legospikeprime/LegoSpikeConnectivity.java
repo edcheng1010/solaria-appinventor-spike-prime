@@ -161,6 +161,10 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "_timer_start = time.ticks_ms()\n" +
         "_mov_lp = None          # cached motor_pair left port (skip re-pair when same)\n" +
         "_mov_rp = None\n" +
+        "_yaw_offset = 0         # software yaw offset in decidegrees (for ResetHubYaw / SetHubYaw)\n" +
+        "\n" +
+        "# Gesture integer → SSP string name (SPIKE Prime 3.x constants)\n" +
+        "_GESTURE_MAP = {0: 'tap', 1: 'double_tap', 2: 'shake', 3: 'fall'}\n" +
         "\n" +
         "# Subscriptions: port_id -> {type, mode, interval_ms, min_change, last_ms, last_val}\n" +
         "_subscriptions = {}\n" +
@@ -262,7 +266,7 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "            raw = hub.motion_sensor.tilt_angles()\n" +
         "        except AttributeError:\n" +
         "            raw = hub.imu.tilt_angles()\n" +
-        "        return (raw[0] // 10, raw[1] // 10, raw[2] // 10)\n" +
+        "        return (raw[0] // 10, raw[1] // 10, (raw[2] - _yaw_offset) // 10)\n" +
         "    except Exception:\n" +
         "        return (0, 0, 0)\n" +
         "\n" +
@@ -319,10 +323,10 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "\n" +
         "\n" +
         "def _angular_velocity():\n" +
-        "    \"\"\"Return angular velocity {x, y, z} in deg/s (v0.7).\"\"\"\n" +
+        "    \"\"\"Return angular velocity {x, y, z} in deg/s. Hub returns decideg/s — divide by 10.\"\"\"\n" +
         "    try:\n" +
         "        av = hub.motion_sensor.angular_velocity()\n" +
-        "        return {'x': av[0], 'y': av[1], 'z': av[2]}\n" +
+        "        return {'x': av[0] / 10.0, 'y': av[1] / 10.0, 'z': av[2] / 10.0}\n" +
         "    except Exception:\n" +
         "        return {'x': 0, 'y': 0, 'z': 0}\n" +
         "\n" +
@@ -332,17 +336,25 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "    # IMU-specific types routed directly\n" +
         "    if port_id == 'imu' or sensor_type in ('pitch', 'roll', 'yaw',\n" +
         "                                             'face_orientation', 'angular_velocity',\n" +
-        "                                             'acceleration'):\n" +
+        "                                             'acceleration', 'gesture'):\n" +
         "        try:\n" +
         "            if sensor_type == 'pitch':          return _tilt_angles()[0]\n" +
         "            if sensor_type == 'roll':           return _tilt_angles()[1]\n" +
         "            if sensor_type == 'yaw':            return _tilt_angles()[2]\n" +
         "            if sensor_type == 'face_orientation': return _face_orientation()\n" +
         "            if sensor_type == 'angular_velocity': return _angular_velocity()\n" +
+        "            if sensor_type == 'gesture':\n" +
+        "                try:\n" +
+        "                    return _GESTURE_MAP.get(hub.motion_sensor.gesture(), None)\n" +
+        "                except Exception:\n" +
+        "                    return None\n" +
         "            if sensor_type == 'acceleration':\n" +
         "                try:\n" +
+        "                    # Hub returns mg — convert to m/s² (divide by 100)\n" +
         "                    acc = hub.motion_sensor.acceleration()\n" +
-        "                    return {'x': acc[0], 'y': acc[1], 'z': acc[2]}\n" +
+        "                    return {'x': round(acc[0] / 100.0, 2),\n" +
+        "                            'y': round(acc[1] / 100.0, 2),\n" +
+        "                            'z': round(acc[2] / 100.0, 2)}\n" +
         "                except Exception:\n" +
         "                    return {'x': 0, 'y': 0, 'z': 0}\n" +
         "        except Exception:\n" +
@@ -1004,15 +1016,26 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "\n" +
         "def _handle_orientation(cmd, obj, req_id):\n" +
         "    \"\"\"v0.7 orientation.* command category.\"\"\"\n" +
+        "    global _yaw_offset\n" +
         "    action = cmd.split('.')[1]  # set_yaw, reset_yaw, set_reference\n" +
         "    try:\n" +
         "        if action == 'reset_yaw':\n" +
-        "            hub.motion_sensor.reset_yaw_angle()\n" +
+        "            # Software offset: capture current raw yaw so relative yaw reads 0.\n" +
+        "            try:\n" +
+        "                _yaw_offset = hub.motion_sensor.tilt_angles()[2]\n" +
+        "            except Exception:\n" +
+        "                _yaw_offset = 0\n" +
+        "            try:\n" +
+        "                hub.motion_sensor.reset_yaw_angle()\n" +
+        "            except Exception:\n" +
+        "                pass\n" +
         "        elif action == 'set_yaw':\n" +
+        "            # Software offset: shift raw yaw so that reading equals requested angle.\n" +
         "            angle = int(obj.get('angle', 0))\n" +
-        "            # SPIKE FW: reset to 0, no direct set_yaw — approximate by resetting\n" +
-        "            # and relying on user to physically orient the hub, or set as offset\n" +
-        "            hub.motion_sensor.reset_yaw_angle()  # best effort; offset not stored\n" +
+        "            try:\n" +
+        "                _yaw_offset = hub.motion_sensor.tilt_angles()[2] - angle * 10\n" +
+        "            except Exception:\n" +
+        "                _yaw_offset = -angle * 10\n" +
         "        elif action == 'set_reference':\n" +
         "            face = obj.get('face', 'face_up')\n" +
         "            try:\n" +
@@ -1141,7 +1164,8 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "\n" +
         "            if should_emit:\n" +
         "                _sensor_event(pid, stype, val)\n" +
-        "                sub['last_val'] = val\n" +
+        "                # Reset gestures to None after emit so the same gesture can fire again next time.\n" +
+        "                sub['last_val'] = None if stype == 'gesture' else val\n" +
         "            sub['last_ms'] = now\n" +
         "\n" +
         "        # System metric subscriptions\n" +

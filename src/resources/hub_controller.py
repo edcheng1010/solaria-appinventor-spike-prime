@@ -79,6 +79,10 @@ _IMAGES_IDX = {
 _timer_start = time.ticks_ms()
 _mov_lp = None          # cached motor_pair left port (skip re-pair when same)
 _mov_rp = None
+_yaw_offset = 0         # software yaw offset in decidegrees (for ResetHubYaw / SetHubYaw)
+
+# Gesture integer → SSP string name (SPIKE Prime 3.x constants)
+_GESTURE_MAP = {0: 'tap', 1: 'double_tap', 2: 'shake', 3: 'fall'}
 
 # Subscriptions: port_id -> {type, mode, interval_ms, min_change, last_ms, last_val}
 _subscriptions = {}
@@ -180,7 +184,7 @@ def _tilt_angles():
             raw = hub.motion_sensor.tilt_angles()
         except AttributeError:
             raw = hub.imu.tilt_angles()
-        return (raw[0] // 10, raw[1] // 10, raw[2] // 10)
+        return (raw[0] // 10, raw[1] // 10, (raw[2] - _yaw_offset) // 10)
     except Exception:
         return (0, 0, 0)
 
@@ -237,10 +241,10 @@ def _face_orientation():
 
 
 def _angular_velocity():
-    """Return angular velocity {x, y, z} in deg/s (v0.7)."""
+    """Return angular velocity {x, y, z} in deg/s. Hub returns decideg/s — divide by 10."""
     try:
         av = hub.motion_sensor.angular_velocity()
-        return {'x': av[0], 'y': av[1], 'z': av[2]}
+        return {'x': av[0] / 10.0, 'y': av[1] / 10.0, 'z': av[2] / 10.0}
     except Exception:
         return {'x': 0, 'y': 0, 'z': 0}
 
@@ -250,17 +254,25 @@ def _read_sensor_value(port_id, sensor_type):
     # IMU-specific types routed directly
     if port_id == 'imu' or sensor_type in ('pitch', 'roll', 'yaw',
                                              'face_orientation', 'angular_velocity',
-                                             'acceleration'):
+                                             'acceleration', 'gesture'):
         try:
             if sensor_type == 'pitch':          return _tilt_angles()[0]
             if sensor_type == 'roll':           return _tilt_angles()[1]
             if sensor_type == 'yaw':            return _tilt_angles()[2]
             if sensor_type == 'face_orientation': return _face_orientation()
             if sensor_type == 'angular_velocity': return _angular_velocity()
+            if sensor_type == 'gesture':
+                try:
+                    return _GESTURE_MAP.get(hub.motion_sensor.gesture(), None)
+                except Exception:
+                    return None
             if sensor_type == 'acceleration':
                 try:
+                    # Hub returns mg — convert to m/s² (1g = 9810 mg, divide by 100 ≈ m/s²)
                     acc = hub.motion_sensor.acceleration()
-                    return {'x': acc[0], 'y': acc[1], 'z': acc[2]}
+                    return {'x': round(acc[0] / 100.0, 2),
+                            'y': round(acc[1] / 100.0, 2),
+                            'z': round(acc[2] / 100.0, 2)}
                 except Exception:
                     return {'x': 0, 'y': 0, 'z': 0}
         except Exception:
@@ -924,15 +936,26 @@ def _handle_timer(cmd, obj, req_id):
 
 def _handle_orientation(cmd, obj, req_id):
     """v0.7 orientation.* command category."""
+    global _yaw_offset
     action = cmd.split('.')[1]  # set_yaw, reset_yaw, set_reference
     try:
         if action == 'reset_yaw':
-            hub.motion_sensor.reset_yaw_angle()
+            # Software offset: capture current raw yaw so relative yaw reads 0.
+            try:
+                _yaw_offset = hub.motion_sensor.tilt_angles()[2]
+            except Exception:
+                _yaw_offset = 0
+            try:
+                hub.motion_sensor.reset_yaw_angle()
+            except Exception:
+                pass
         elif action == 'set_yaw':
+            # Software offset: shift raw yaw so that reading equals requested angle.
             angle = int(obj.get('angle', 0))
-            # SPIKE FW: reset to 0, no direct set_yaw — approximate by resetting
-            # and relying on user to physically orient the hub, or set as offset
-            hub.motion_sensor.reset_yaw_angle()  # best effort; offset not stored
+            try:
+                _yaw_offset = hub.motion_sensor.tilt_angles()[2] - angle * 10
+            except Exception:
+                _yaw_offset = -angle * 10
         elif action == 'set_reference':
             face = obj.get('face', 'face_up')
             try:
@@ -1061,7 +1084,8 @@ def _run_loop():
 
             if should_emit:
                 _sensor_event(pid, stype, val)
-                sub['last_val'] = val
+                # Reset gestures to None after emit so the same gesture can fire again next time.
+                sub['last_val'] = None if stype == 'gesture' else val
             sub['last_ms'] = now
 
         # System metric subscriptions
