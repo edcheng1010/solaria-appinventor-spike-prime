@@ -47,7 +47,6 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
     private String colorSensorPort    = "C";
     private String distanceSensorPort = "D";
     private String pressureSensorPort = "E";
-    private String axis               = "Pitch";
     private long   timerStartMs       = System.currentTimeMillis();
 
     // Accumulator for GetHubOrientation — assembles pitch+roll+yaw before firing HubOrientationRead.
@@ -132,27 +131,6 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
     public String PressureSensorPort() { return pressureSensorPort; }
 
     // =========================================================================
-    // Axis property
-    // =========================================================================
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR,
-        description = "Hub tilt axis used by GetHubTiltAngle: Pitch, Roll, or Yaw")
-    @DesignerProperty(
-        editorType   = PropertyTypeConstants.PROPERTY_TYPE_CHOICES,
-        editorArgs   = {"Pitch", "Roll", "Yaw"},
-        defaultValue = "Pitch")
-    public void Axis(@Options(TiltAxis.class) String value) {
-        if ("pitch".equalsIgnoreCase(value) || "roll".equalsIgnoreCase(value)
-                || "yaw".equalsIgnoreCase(value)) {
-            String v = value.trim();
-            axis = v.substring(0, 1).toUpperCase() + v.substring(1).toLowerCase();
-        }
-    }
-
-    @SimpleProperty(category = PropertyCategory.BEHAVIOR,
-        description = "Hub tilt axis used by GetHubTiltAngle: Pitch, Roll, or Yaw")
-    public String Axis() { return axis; }
-
-    // =========================================================================
     // Sensor read functions
     // =========================================================================
 
@@ -209,11 +187,12 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
      * Fires HubTiltAngleRead(axis, degrees) when the hub responds.
      */
     @SimpleFunction(description =
-        "Request the hub tilt angle for the configured Axis (Pitch, Roll, or Yaw). "
-        + "Fires HubTiltAngleRead when the hub responds.")
-    public void GetHubTiltAngle() {
+        "Request the hub tilt angle for the given axis. Fires HubTiltAngleRead when the hub responds.")
+    public void GetHubTiltAngle(@Options(TiltAxis.class) String axis) {
+        TiltAxis a = TiltAxis.fromUnderlyingValue(axis);
+        String name = a != null ? a.toUnderlyingValue().toLowerCase() : "pitch";
         sendSensorSSP(new SSPMessage("sensor.read")
-            .withPort("imu").withParam("type", axis.toLowerCase()));
+            .withPort("imu").withParam("type", name));
     }
 
     /**
