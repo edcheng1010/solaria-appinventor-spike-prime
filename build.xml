@@ -106,7 +106,7 @@
         <include name="MotorPort.java"/>
         <include name="MotorDirection.java"/>
         <include name="MovementDirection.java"/>
-        <include name="HubLightColor.java"/>
+        <include name="CenterButtonColor.java"/>
         <include name="LightMatrixImage.java"/>
         <include name="SensorColor.java"/>
         <include name="TiltAxis.java"/>
@@ -173,7 +173,7 @@
       <include name="Port.java"/>
       <include name="MotorDirection.java"/>
       <include name="MovementDirection.java"/>
-      <include name="HubLightColor.java"/>
+      <include name="CenterButtonColor.java"/>
       <include name="LightMatrixImage.java"/>
       <include name="SensorColor.java"/>
       <include name="TiltAxis.java"/>

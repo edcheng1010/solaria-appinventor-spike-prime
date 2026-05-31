@@ -158,15 +158,14 @@ public class LegoSpikeLight extends AndroidNonvisibleComponent {
             .withParam("rotation", rotation));
     }
 
-    @SimpleFunction(description =
-        "Set the status (center button) LED color. "
-        + "color: 'red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'violet', 'magenta', 'white', or 'off'.")
-    public void SetStatusLightColor(String color) {
+    @SimpleFunction(description = "Set the center button light color.")
+    public void SetCenterButtonLight(@Options(CenterButtonColor.class) String color) {
         if (!checkConnected()) return;
-        if (color == null) color = "off";
+        CenterButtonColor c = CenterButtonColor.fromUnderlyingValue(color);
+        String name = c != null ? c.toUnderlyingValue().toLowerCase() : "off";
         connectivity.sendSSP(new SSPMessage("led.set")
             .withPort("status")
-            .withParam("color", color.toLowerCase()));
+            .withParam("color", name));
     }
 
     // =========================================================================

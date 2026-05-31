@@ -41,14 +41,16 @@ PORTS = {'A': port.A, 'B': port.B, 'C': port.C,
 
 # Status LED color name → color constant (SSP enum values)
 _LED_COLORS = {
-    'red': color.RED if hasattr(color, 'RED') else 9,
-    'orange': color.ORANGE if hasattr(color, 'ORANGE') else 7,
-    'yellow': color.YELLOW if hasattr(color, 'YELLOW') else 6,
-    'green': color.GREEN if hasattr(color, 'GREEN') else 5,
-    'cyan': color.CYAN if hasattr(color, 'CYAN') else 10,
+    'black': color.BLACK if hasattr(color, 'BLACK') else 0,
+    'magenta': color.MAGENTA if hasattr(color, 'MAGENTA') else 1,
+    'violet': color.VIOLET if hasattr(color, 'VIOLET') else 2,
     'blue': color.BLUE if hasattr(color, 'BLUE') else 3,
-    'violet': color.VIOLET if hasattr(color, 'VIOLET') else 11,
-    'magenta': color.MAGENTA if hasattr(color, 'MAGENTA') else 8,
+    'azure': color.AZURE if hasattr(color, 'AZURE') else 4,
+    'cyan': color.CYAN if hasattr(color, 'CYAN') else 5,
+    'green': color.GREEN if hasattr(color, 'GREEN') else 6,
+    'yellow': color.YELLOW if hasattr(color, 'YELLOW') else 7,
+    'orange': color.ORANGE if hasattr(color, 'ORANGE') else 8,
+    'red': color.RED if hasattr(color, 'RED') else 9,
     'white': color.WHITE if hasattr(color, 'WHITE') else 10,
     'off': 0,
 }
@@ -697,12 +699,14 @@ def _handle_led(cmd, obj, req_id):
                 color_name = str(obj.get('color', 'off')).lower()
                 c = _LED_COLORS.get(color_name, 0)
                 try:
-                    hub.light.color(c)
+                    # Two-arg form: target the POWER (center button) light.
+                    # CONNECT (light 1) is owned by firmware for BLE status.
+                    hub.light.color(getattr(hub.light, 'POWER', 0), c)
                 except Exception:
                     pass
             elif action == 'off':
                 try:
-                    hub.light.color(0)
+                    hub.light.color(getattr(hub.light, 'POWER', 0), 0)
                 except Exception:
                     pass
     elif len(parts) >= 3 and parts[1] == 'matrix':

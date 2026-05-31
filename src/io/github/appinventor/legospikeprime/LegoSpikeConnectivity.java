@@ -122,14 +122,16 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "\n" +
         "# Status LED color name → color constant (SSP enum values)\n" +
         "_LED_COLORS = {\n" +
-        "    'red': color.RED if hasattr(color, 'RED') else 9,\n" +
-        "    'orange': color.ORANGE if hasattr(color, 'ORANGE') else 7,\n" +
-        "    'yellow': color.YELLOW if hasattr(color, 'YELLOW') else 6,\n" +
-        "    'green': color.GREEN if hasattr(color, 'GREEN') else 5,\n" +
-        "    'cyan': color.CYAN if hasattr(color, 'CYAN') else 10,\n" +
+        "    'black': color.BLACK if hasattr(color, 'BLACK') else 0,\n" +
+        "    'magenta': color.MAGENTA if hasattr(color, 'MAGENTA') else 1,\n" +
+        "    'violet': color.VIOLET if hasattr(color, 'VIOLET') else 2,\n" +
         "    'blue': color.BLUE if hasattr(color, 'BLUE') else 3,\n" +
-        "    'violet': color.VIOLET if hasattr(color, 'VIOLET') else 11,\n" +
-        "    'magenta': color.MAGENTA if hasattr(color, 'MAGENTA') else 8,\n" +
+        "    'azure': color.AZURE if hasattr(color, 'AZURE') else 4,\n" +
+        "    'cyan': color.CYAN if hasattr(color, 'CYAN') else 5,\n" +
+        "    'green': color.GREEN if hasattr(color, 'GREEN') else 6,\n" +
+        "    'yellow': color.YELLOW if hasattr(color, 'YELLOW') else 7,\n" +
+        "    'orange': color.ORANGE if hasattr(color, 'ORANGE') else 8,\n" +
+        "    'red': color.RED if hasattr(color, 'RED') else 9,\n" +
         "    'white': color.WHITE if hasattr(color, 'WHITE') else 10,\n" +
         "    'off': 0,\n" +
         "}\n" +
@@ -778,12 +780,12 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "                color_name = str(obj.get('color', 'off')).lower()\n" +
         "                c = _LED_COLORS.get(color_name, 0)\n" +
         "                try:\n" +
-        "                    hub.light.color(c)\n" +
+        "                    hub.light.color(getattr(hub.light, 'POWER', 0), c)\n" +
         "                except Exception:\n" +
         "                    pass\n" +
         "            elif action == 'off':\n" +
         "                try:\n" +
-        "                    hub.light.color(0)\n" +
+        "                    hub.light.color(getattr(hub.light, 'POWER', 0), 0)\n" +
         "                except Exception:\n" +
         "                    pass\n" +
         "    elif len(parts) >= 3 and parts[1] == 'matrix':\n" +
