@@ -551,9 +551,9 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
 
     @SimpleEvent(description =
         "Fired when GetHubFaceOrientation responds. "
-        + "orientation: face_up, face_down, port_a_up, port_a_down, port_e_up, port_e_down.")
-    public void HubFaceOrientationRead(String orientation) {
-        EventDispatcher.dispatchEvent(this, "HubFaceOrientationRead", orientation);
+        + "faceOrientation: face_up, face_down, port_a_up, port_a_down, port_e_up, port_e_down.")
+    public void HubFaceOrientationRead(String faceOrientation) {
+        EventDispatcher.dispatchEvent(this, "HubFaceOrientationRead", faceOrientation);
     }
 
     @SimpleEvent(description =
@@ -564,9 +564,10 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
     }
 
     @SimpleEvent(description =
-        "Fired when the hub detects a face-orientation change (after SubscribeToHubFaceOrientation).")
-    public void HubFaceOrientationChanged(String orientation) {
-        EventDispatcher.dispatchEvent(this, "HubFaceOrientationChanged", orientation);
+        "Fired when the hub detects a face-orientation change (after SubscribeToHubFaceOrientation). "
+        + "faceOrientation: face_up, face_down, port_a_up, port_a_down, port_e_up, port_e_down.")
+    public void HubFaceOrientationChanged(String faceOrientation) {
+        EventDispatcher.dispatchEvent(this, "HubFaceOrientationChanged", faceOrientation);
     }
 
     @SimpleEvent(description =
