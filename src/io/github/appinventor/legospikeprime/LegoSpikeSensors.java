@@ -478,7 +478,7 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
 
     @SimpleFunction(description =
         "Subscribe to left hub button events. WhenHubButtonPressed/WhenHubButtonReleased fire on change.")
-    public void SubscribeToLeftButton() {
+    public void SubscribeToHubLeftButton() {
         if (!checkConnected()) return;
         connectivity.sendSSP(new SSPMessage("system.subscribe")
             .withParam("metric", "button.left").withParam("interval", 100));
@@ -486,7 +486,7 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
 
     @SimpleFunction(description =
         "Subscribe to right hub button events. WhenHubButtonPressed/WhenHubButtonReleased fire on change.")
-    public void SubscribeToRightButton() {
+    public void SubscribeToHubRightButton() {
         if (!checkConnected()) return;
         connectivity.sendSSP(new SSPMessage("system.subscribe")
             .withParam("metric", "button.right").withParam("interval", 100));
@@ -494,7 +494,7 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
 
     @SimpleFunction(description =
         "Subscribe to center hub button events. WhenHubButtonPressed/WhenHubButtonReleased fire on change.")
-    public void SubscribeToCenterButton() {
+    public void SubscribeToHubCenterButton() {
         if (!checkConnected()) return;
         connectivity.sendSSP(new SSPMessage("system.subscribe")
             .withParam("metric", "button.center").withParam("interval", 100));
@@ -502,7 +502,7 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
 
     @SimpleFunction(description =
         "Subscribe to gesture events. HubGestureDetected fires on shake, tap, double_tap, fall, face_up, or face_down.")
-    public void SubscribeToGestures() {
+    public void SubscribeToHubGestures() {
         if (!checkConnected()) return;
         connectivity.sendSSP(new SSPMessage("sensor.subscribe")
             .withPort("imu")
@@ -512,7 +512,7 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
 
     @SimpleFunction(description =
         "Subscribe to face orientation changes. HubFaceOrientationChanged fires when the hub flips.")
-    public void SubscribeToFaceOrientation() {
+    public void SubscribeToHubFaceOrientation() {
         if (!checkConnected()) return;
         connectivity.sendSSP(new SSPMessage("sensor.subscribe")
             .withPort("imu")
@@ -557,14 +557,14 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
     }
 
     @SimpleEvent(description =
-        "Fired when the hub detects a gesture (after SubscribeToGestures). "
+        "Fired when the hub detects a gesture (after SubscribeToHubGestures). "
         + "gesture: shake, tap, double_tap, fall, face_up, face_down.")
     public void HubGestureDetected(String gesture) {
         EventDispatcher.dispatchEvent(this, "HubGestureDetected", gesture);
     }
 
     @SimpleEvent(description =
-        "Fired when the hub detects a face-orientation change (after SubscribeToFaceOrientation).")
+        "Fired when the hub detects a face-orientation change (after SubscribeToHubFaceOrientation).")
     public void HubFaceOrientationChanged(String orientation) {
         EventDispatcher.dispatchEvent(this, "HubFaceOrientationChanged", orientation);
     }
