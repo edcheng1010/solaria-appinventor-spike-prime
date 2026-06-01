@@ -120,6 +120,11 @@ _FACE_NAME_MAP = {
 
 # Gesture integer → SSP string name (SPIKE Prime 3.x constants)
 _GESTURE_MAP = {0: 'tap', 1: 'double_tap', 2: 'shake', 3: 'fall'}
+# Button constants for hub.button.pressed() API (SPIKE Prime 3.x)
+_BTN_CONST = {
+    'left':  hub.button.LEFT  if hasattr(hub.button, 'LEFT')  else 1,
+    'right': hub.button.RIGHT if hasattr(hub.button, 'RIGHT') else 2,
+}
 # Gesture fast-poll: polls gesture() every 10 ms for this many ticks.
 # 5 ticks = 50 ms (tap reliable); 20 ticks = 200 ms (shake/double_tap reliable).
 _GESTURE_POLL_TICKS = 20
@@ -1075,18 +1080,14 @@ def _handle_orientation(cmd, obj, req_id):
 
 
 def _read_button(name):
-    """Read button state. Returns 'pressed' or 'released'."""
+    """Read button state using hub.button.pressed(const) — SPIKE Prime 3.x API."""
     try:
-        if name == 'left':
-            return 'pressed' if hub.button.left.is_pressed() else 'released'
-        elif name == 'right':
-            return 'pressed' if hub.button.right.is_pressed() else 'released'
-        elif name == 'center':
-            return 'pressed' if hub.button.center.is_pressed() else 'released'
-    except AttributeError:
-        # Fallback for firmwares that use hub.port button API
-        pass
-    return 'released'
+        c = _BTN_CONST.get(name)
+        if c is None:
+            return 'released'
+        return 'pressed' if hub.button.pressed(c) > 0 else 'released'
+    except Exception:
+        return 'released'
 
 
 # ---------------------------------------------------------------------------
@@ -1229,8 +1230,10 @@ def _run_loop():
             else:
                 val = _read_system_metric(metric)
 
-            if val is not None and val != sub['last_val']:
-                _system_event(metric, val)
+            if val is not None:
+                # Only fire on actual change from a known baseline (not on first read).
+                if sub['last_val'] is not None and val != sub['last_val']:
+                    _system_event(metric, val)
                 sub['last_val'] = val
             sub['last_ms'] = now
 

@@ -197,6 +197,10 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "\n" +
         "# Gesture integer → SSP string name (SPIKE Prime 3.x constants)\n" +
         "_GESTURE_MAP = {0: 'tap', 1: 'double_tap', 2: 'shake', 3: 'fall'}\n" +
+        "_BTN_CONST = {\n" +
+        "    'left':  hub.button.LEFT  if hasattr(hub.button, 'LEFT')  else 1,\n" +
+        "    'right': hub.button.RIGHT if hasattr(hub.button, 'RIGHT') else 2,\n" +
+        "}\n" +
         "_GESTURE_POLL_TICKS = 20  # 20x10ms=200ms window; reduce to 5 for faster loop\n" +
         "\n" +
         "# Subscriptions: port_id -> {type, mode, interval_ms, min_change, last_ms, last_val}\n" +
@@ -1120,18 +1124,13 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "\n" +
         "\n" +
         "def _read_button(name):\n" +
-        "    \"\"\"Read button state. Returns 'pressed' or 'released'.\"\"\"\n" +
         "    try:\n" +
-        "        if name == 'left':\n" +
-        "            return 'pressed' if hub.button.left.is_pressed() else 'released'\n" +
-        "        elif name == 'right':\n" +
-        "            return 'pressed' if hub.button.right.is_pressed() else 'released'\n" +
-        "        elif name == 'center':\n" +
-        "            return 'pressed' if hub.button.center.is_pressed() else 'released'\n" +
-        "    except AttributeError:\n" +
-        "        # Fallback for firmwares that use hub.port button API\n" +
-        "        pass\n" +
-        "    return 'released'\n" +
+        "        c = _BTN_CONST.get(name)\n" +
+        "        if c is None:\n" +
+        "            return 'released'\n" +
+        "        return 'pressed' if hub.button.pressed(c) > 0 else 'released'\n" +
+        "    except Exception:\n" +
+        "        return 'released'\n" +
         "\n" +
         "\n" +
         "# ---------------------------------------------------------------------------\n" +
@@ -1273,8 +1272,9 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "            else:\n" +
         "                val = _read_system_metric(metric)\n" +
         "\n" +
-        "            if val is not None and val != sub['last_val']:\n" +
-        "                _system_event(metric, val)\n" +
+        "            if val is not None:\n" +
+        "                if sub['last_val'] is not None and val != sub['last_val']:\n" +
+        "                    _system_event(metric, val)\n" +
         "                sub['last_val'] = val\n" +
         "            sub['last_ms'] = now\n" +
         "\n" +
