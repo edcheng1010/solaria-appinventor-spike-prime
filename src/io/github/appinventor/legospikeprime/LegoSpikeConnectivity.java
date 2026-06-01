@@ -482,8 +482,9 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "            return _CLR_MAP.get(c, str(c))\n" +
         "        elif sensor_type == 'rgb':\n" +
         "            try:\n" +
-        "                rgb = color_sensor.rgb(p)\n" +
-        "                return [rgb[0], rgb[1], rgb[2]]\n" +
+        "                rgb = color_sensor.rgbi(p)\n" +
+        "                intensity = rgb[3] if rgb[3] > 0 else 1\n" +
+        "                return [min(255, int(rgb[i] * 255 // intensity)) for i in range(3)]\n" +
         "            except Exception:\n" +
         "                return [0, 0, 0]\n" +
         "        elif sensor_type == 'reflected':\n" +
@@ -854,7 +855,16 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "\n" +
         "def _handle_led(cmd, obj, req_id):\n" +
         "    global _matrix_pixels, _matrix_brightness, _matrix_orientation\n" +
-        "    parts = cmd.split('.')  # ['led', ...] or ['led', 'matrix', 'pixel']\n" +
+        "    parts = cmd.split('.')\n" +
+        "    if len(parts) == 2 and parts[1] == 'distance':\n" +
+        "        p = PORTS.get(obj.get('port', '').upper())\n" +
+        "        if p is not None:\n" +
+        "            try:\n" +
+        "                distance_sensor.show(p, [int(obj.get('tl',0)), int(obj.get('tr',0)),\n" +
+        "                                         int(obj.get('bl',0)), int(obj.get('br',0))])\n" +
+        "            except Exception as e:\n" +
+        "                _send_error(301, 'distance LED error: ' + str(e), req_id)\n" +
+        "        return\n" +
         "    if len(parts) == 2:\n" +
         "        action = parts[1]  # set, off\n" +
         "        port_id = obj.get('port', '')\n" +

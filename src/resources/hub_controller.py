@@ -433,8 +433,10 @@ def _read_sensor_value(port_id, sensor_type):
             return _CLR_MAP.get(c, str(c))
         elif sensor_type == 'rgb':
             try:
-                rgb = color_sensor.rgb(p)
-                return [rgb[0], rgb[1], rgb[2]]
+                rgb = color_sensor.rgbi(p)  # (r, g, b, intensity) — raw 0-1023 range
+                intensity = rgb[3] if rgb[3] > 0 else 1
+                # Normalize to 0-255 using intensity as the scale reference.
+                return [min(255, int(rgb[i] * 255 // intensity)) for i in range(3)]
             except Exception:
                 return [0, 0, 0]
         elif sensor_type == 'reflected':
@@ -805,7 +807,20 @@ def _handle_movement(cmd, obj, req_id):
 
 def _handle_led(cmd, obj, req_id):
     global _matrix_pixels, _matrix_brightness, _matrix_orientation
-    parts = cmd.split('.')  # ['led', ...] or ['led', 'matrix', 'pixel']
+    parts = cmd.split('.')  # ['led', 'set'], ['led', 'distance'], ['led', 'matrix', 'pixel']
+    if len(parts) == 2 and parts[1] == 'distance':
+        p = PORTS.get(obj.get('port', '').upper())
+        if p is not None:
+            try:
+                distance_sensor.show(p, [
+                    int(obj.get('tl', 0)),
+                    int(obj.get('tr', 0)),
+                    int(obj.get('bl', 0)),
+                    int(obj.get('br', 0)),
+                ])
+            except Exception as e:
+                _send_error(301, 'distance LED error: ' + str(e), req_id)
+        return
     if len(parts) == 2:
         action = parts[1]  # set, off
         port_id = obj.get('port', '')
