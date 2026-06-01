@@ -274,6 +274,7 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
                 final String metric = obj.optString("metric");
                 if (metric.startsWith("button.")) {
                     final String btnName = metric.substring("button.".length());
+                    if ("center".equals(btnName)) return; // center button kills hub program
                     final String state   = obj.optString("value");
                     mainHandler.post(() -> {
                         if ("pressed".equals(state)) {
@@ -495,13 +496,8 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
             .withParam("metric", "button.right").withParam("interval", 100));
     }
 
-    @SimpleFunction(description =
-        "Subscribe to center hub button events. WhenHubButtonPressed/WhenHubButtonReleased fire on change.")
-    public void SubscribeToHubCenterButton() {
-        if (!checkConnected()) return;
-        connectivity.sendSSP(new SSPMessage("system.subscribe")
-            .withParam("metric", "button.center").withParam("interval", 100));
-    }
+    // SubscribeToHubCenterButton removed: pressing the center button terminates the
+    // hub Python program at firmware level — it cannot be detected from user code.
 
     @SimpleFunction(description =
         "Subscribe to gesture events. HubGestureDetected fires on shake, tap, double_tap, or fall.")
