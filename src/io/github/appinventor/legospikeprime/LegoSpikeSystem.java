@@ -32,11 +32,6 @@ public class LegoSpikeSystem extends AndroidNonvisibleComponent
     private LegoSpikeConnectivity connectivity;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    // Last known button states
-    private String buttonLeftState   = "released";
-    private String buttonRightState  = "released";
-    private String buttonCenterState = "released";
-
     public LegoSpikeSystem(ComponentContainer container) {
         super(container.$form());
     }
@@ -67,25 +62,32 @@ public class LegoSpikeSystem extends AndroidNonvisibleComponent
     @SimpleFunction(description =
         "Request the hub battery level (0–100%). Fires BatteryLevelRead when received.")
     public void GetBatteryLevel() {
-        sendSystem("battery", 60000);
+        sendSystemRead("battery");
     }
 
     @SimpleFunction(description =
         "Request the hub internal temperature (°C). Fires TemperatureRead when received.")
     public void GetTemperature() {
-        sendSystem("temperature", 60000);
+        sendSystemRead("temperature");
     }
 
     @SimpleFunction(description =
         "Request whether the hub is currently charging. Fires ChargingStateRead when received.")
     public void IsCharging() {
-        sendSystem("charging", 60000);
+        sendSystemRead("charging");
     }
 
     @SimpleFunction(description =
-        "Request the BLE connection RSSI in dBm. Fires RSSIRead when received.")
+        "Request the BLE connection signal strength (dBm). Fires RSSIRead when received.")
     public void GetRSSI() {
-        sendSystem("connection_rssi", 5000);
+        if (!checkConnected()) return;
+        try {
+            int rssi = (Integer) connectivity.getBluetoothLE().getClass()
+                .getMethod("ConnectedDeviceRssi").invoke(connectivity.getBluetoothLE());
+            mainHandler.post(() -> RSSIRead(rssi));
+        } catch (Exception e) {
+            reportError("RSSI unavailable: " + e.getMessage());
+        }
     }
 
     // =========================================================================
@@ -157,18 +159,10 @@ public class LegoSpikeSystem extends AndroidNonvisibleComponent
     // =========================================================================
     // Helpers
     // =========================================================================
-    private void sendSystem(String metric, int intervalMs) {
+    private void sendSystemRead(String metric) {
         if (!checkConnected()) return;
-        connectivity.sendSSP(new SSPMessage("system.subscribe")
-            .withParam("metric", metric)
-            .withParam("interval", intervalMs));
-    }
-
-    private void subscribeButtonMetric(String metric) {
-        if (!checkConnected()) return;
-        connectivity.sendSSP(new SSPMessage("system.subscribe")
-            .withParam("metric", metric)
-            .withParam("interval", 100));
+        connectivity.sendSSP(new SSPMessage("system.read")
+            .withParam("metric", metric));
     }
 
     private boolean checkConnected() {

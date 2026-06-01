@@ -101,25 +101,6 @@ public class LegoSpikeSound extends AndroidNonvisibleComponent
             .withParam("metric", "volume"));
     }
 
-    @SimpleFunction(description =
-        "Start playing a built-in sound by name (non-blocking).")
-    public void StartSound(String soundName) {
-        if (!checkConnected()) return;
-        connectivity.sendSSP(new SSPMessage("sound.play")
-            .withParam("sound", soundName)
-            .withParam("wait", false));
-    }
-
-    @SimpleFunction(description =
-        "Play a built-in sound and wait for it to finish. "
-        + "Fires SoundComplete when done.")
-    public void PlaySoundUntilDone(String soundName) {
-        if (!checkConnected()) return;
-        connectivity.sendSSP(new SSPMessage("sound.play")
-            .withParam("sound", soundName)
-            .withParam("wait", true));
-    }
-
     // =========================================================================
     // Events
     // =========================================================================
@@ -127,11 +108,6 @@ public class LegoSpikeSound extends AndroidNonvisibleComponent
     @SimpleEvent(description = "Fired when the hub confirms the current volume level.")
     public void VolumeRead(int level) {
         EventDispatcher.dispatchEvent(this, "VolumeRead", level);
-    }
-
-    @SimpleEvent(description = "Fired when PlaySoundUntilDone completes.")
-    public void SoundComplete() {
-        EventDispatcher.dispatchEvent(this, "SoundComplete");
     }
 
     // =========================================================================
@@ -149,8 +125,6 @@ public class LegoSpikeSound extends AndroidNonvisibleComponent
                     final int v = obj.optInt("value", volume);
                     mainHandler.post(() -> VolumeRead(v));
                 }
-            } else if ("sound_complete".equals(event)) {
-                mainHandler.post(this::SoundComplete);
             }
         } catch (Exception ignored) {}
     }

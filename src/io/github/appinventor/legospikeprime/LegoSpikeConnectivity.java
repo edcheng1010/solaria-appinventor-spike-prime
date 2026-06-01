@@ -511,7 +511,7 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "                return hub.battery.voltage() // 40  # rough % from mV\n" +
         "        elif metric == 'temperature':\n" +
         "            try:\n" +
-        "                return hub.temperature()\n" +
+        "                return hub.temperature() / 10.0\n" +
         "            except AttributeError:\n" +
         "                return None\n" +
         "        elif metric == 'charging':\n" +
@@ -928,10 +928,10 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "            freq = int(obj.get('freq', 440))\n" +
         "            dur = obj.get('duration')\n" +
         "            if dur is not None:\n" +
-        "                hub.sound.beep(int(dur), freq)\n" +
+        "                hub.sound.beep(freq, int(dur), _cached_volume)\n" +
         "            else:\n" +
         "                # Indefinite beep — no native API; just beep for a long time\n" +
-        "                hub.sound.beep(30000, freq)\n" +
+        "                hub.sound.beep(freq, 30000, _cached_volume)\n" +
         "\n" +
         "        elif action == 'stop':\n" +
         "            hub.sound.stop()\n" +
@@ -960,7 +960,7 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "            level = int(obj.get('level', 50))\n" +
         "            _cached_volume = max(0, min(100, level))\n" +
         "            try:\n" +
-        "                hub.sound.set_volume(_cached_volume)\n" +
+        "                hub.sound.volume(_cached_volume)\n" +
         "            except AttributeError:\n" +
         "                pass\n" +
         "\n" +
@@ -999,7 +999,7 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "                name, octave = m.group(1), int(m.group(2))\n" +
         "                base_freq = NOTE_FREQ.get(name, 440)\n" +
         "                freq = int(base_freq * (2 ** (octave - 4)))\n" +
-        "                hub.sound.beep(duration_ms, freq)\n" +
+        "                hub.sound.beep(freq, duration_ms, _cached_volume)\n" +
         "            else:\n" +
         "                time.sleep_ms(duration_ms)\n" +
         "    except Exception:\n" +
@@ -1328,6 +1328,9 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
     // =========================================================================
     private Component bluetoothLE;
     private BluetoothInterfaceImpl bluetoothInterface;
+
+    /** Package-visible accessor for sub-components that need to call BluetoothLE methods. */
+    Component getBluetoothLE() { return bluetoothLE; }
 
     private volatile boolean isConnected   = false;
     private volatile boolean isScanning    = false;

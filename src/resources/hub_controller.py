@@ -463,7 +463,7 @@ def _read_system_metric(metric):
                 return hub.battery.voltage() // 40  # rough % from mV
         elif metric == 'temperature':
             try:
-                return hub.temperature()
+                return hub.temperature() / 10.0  # hub returns decidegrees
             except AttributeError:
                 return None
         elif metric == 'charging':
@@ -886,10 +886,10 @@ def _handle_sound(cmd, obj, req_id):
             freq = int(obj.get('freq', 440))
             dur = obj.get('duration')
             if dur is not None:
-                hub.sound.beep(int(dur), freq)
+                hub.sound.beep(freq, int(dur), _cached_volume)
             else:
                 # Indefinite beep — no native API; just beep for a long time
-                hub.sound.beep(30000, freq)
+                hub.sound.beep(freq, 30000, _cached_volume)
 
         elif action == 'stop':
             hub.sound.stop()
@@ -918,8 +918,8 @@ def _handle_sound(cmd, obj, req_id):
             level = int(obj.get('level', 50))
             _cached_volume = max(0, min(100, level))
             try:
-                hub.sound.set_volume(_cached_volume)
-            except AttributeError:
+                hub.sound.volume(_cached_volume)
+            except Exception:
                 pass
 
         elif action == 'read':
@@ -957,7 +957,7 @@ def _play_notes_sequence(notes_str, tempo, req_id):
                 name, octave = m.group(1), int(m.group(2))
                 base_freq = NOTE_FREQ.get(name, 440)
                 freq = int(base_freq * (2 ** (octave - 4)))
-                hub.sound.beep(duration_ms, freq)
+                hub.sound.beep(freq, duration_ms, _cached_volume)
             else:
                 time.sleep_ms(duration_ms)
     except Exception:
