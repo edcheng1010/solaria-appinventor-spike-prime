@@ -136,8 +136,15 @@ _sys_subscriptions = {}  # metric -> {interval_ms, last_ms, last_val}
 _last_ping_ms = None     # None = heartbeat not yet started
 _heartbeat_active = False
 
-# v0.8: cached volume for sound.read
+# v0.8: cached volume (student-facing 0-100) for sound.read
 _cached_volume = 50
+
+def _hw_volume():
+    # Hub speaker is inaudible below ~67. Remap student 1-100 -> hub 67-100
+    # so the whole dial is usable. 0 stays truly off.
+    if _cached_volume <= 0:
+        return 0
+    return 67 + (_cached_volume - 1) * 33 // 99
 
 # v0.8: cached motor acceleration rates (port_id -> ms)
 _motor_acceleration = {}
@@ -894,10 +901,10 @@ def _handle_sound(cmd, obj, req_id):
             freq = int(obj.get('freq', 440))
             dur = obj.get('duration')
             if dur is not None:
-                hub.sound.beep(freq, int(dur), _cached_volume)
+                hub.sound.beep(freq, int(dur), _hw_volume())
             else:
                 # Indefinite beep — no native API; just beep for a long time
-                hub.sound.beep(freq, 30000, _cached_volume)
+                hub.sound.beep(freq, 30000, _hw_volume())
 
         elif action == 'stop':
             hub.sound.stop()
@@ -923,12 +930,10 @@ def _handle_sound(cmd, obj, req_id):
                     hub.sound.play(str(sound_name))
 
         elif action == 'set_volume':
+            # Store only — volume is applied per-beep via the beep() volume arg.
+            # Do NOT also call hub.sound.volume() or scaling is applied twice.
             level = int(obj.get('level', 50))
             _cached_volume = max(0, min(100, level))
-            try:
-                hub.sound.volume(_cached_volume)
-            except Exception:
-                pass
 
         elif action == 'read':
             metric = obj.get('metric', 'volume')
@@ -965,7 +970,7 @@ def _play_notes_sequence(notes_str, tempo, req_id):
                 name, octave = m.group(1), int(m.group(2))
                 base_freq = NOTE_FREQ.get(name, 440)
                 freq = int(base_freq * (2 ** (octave - 4)))
-                hub.sound.beep(freq, duration_ms, _cached_volume)
+                hub.sound.beep(freq, duration_ms, _hw_volume())
             else:
                 time.sleep_ms(duration_ms)
     except Exception:
@@ -1166,6 +1171,11 @@ def on_message(data):
 
 def start():
     """Entry point — called when running on the SPIKE Prime hub."""
+    # Pin global speaker volume to max so per-beep volume controls the full range.
+    try:
+        hub.sound.volume(100)
+    except Exception:
+        pass
     tunnel.callback(on_message)
     _send(_build_capability())
     _run_loop()

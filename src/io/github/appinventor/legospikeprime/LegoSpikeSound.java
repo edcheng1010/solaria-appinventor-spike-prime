@@ -21,7 +21,9 @@ import org.json.JSONObject;
 
 @SimpleObject(external = true)
 @DesignerComponent(version = 1,
-    description = "Controls the speaker on a LEGO SPIKE Prime hub. "
+    description = "Controls the speaker on a LEGO SPIKE Prime hub (beeps/tones only). "
+        + "The hub speaker cannot play named sound clips — for recorded or named audio, "
+        + "use App Inventor's built-in Sound or Player component (plays on the phone). "
         + "Set the Connectivity property to a LegoSpikeConnectivity component.",
     category = ComponentCategory.EXTENSION,
     nonVisible = true,

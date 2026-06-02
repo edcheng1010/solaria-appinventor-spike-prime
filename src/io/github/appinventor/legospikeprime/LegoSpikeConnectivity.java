@@ -210,8 +210,13 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "_last_ping_ms = None     # None = heartbeat not yet started\n" +
         "_heartbeat_active = False\n" +
         "\n" +
-        "# v0.8: cached volume for sound.read\n" +
+        "# v0.8: cached volume (student-facing 0-100) for sound.read\n" +
         "_cached_volume = 50\n" +
+        "\n" +
+        "def _hw_volume():\n" +
+        "    if _cached_volume <= 0:\n" +
+        "        return 0\n" +
+        "    return 67 + (_cached_volume - 1) * 33 // 99\n" +
         "\n" +
         "# v0.8: cached motor acceleration rates (port_id -> ms)\n" +
         "_motor_acceleration = {}\n" +
@@ -932,10 +937,10 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "            freq = int(obj.get('freq', 440))\n" +
         "            dur = obj.get('duration')\n" +
         "            if dur is not None:\n" +
-        "                hub.sound.beep(freq, int(dur), _cached_volume)\n" +
+        "                hub.sound.beep(freq, int(dur), _hw_volume())\n" +
         "            else:\n" +
         "                # Indefinite beep — no native API; just beep for a long time\n" +
-        "                hub.sound.beep(freq, 30000, _cached_volume)\n" +
+        "                hub.sound.beep(freq, 30000, _hw_volume())\n" +
         "\n" +
         "        elif action == 'stop':\n" +
         "            hub.sound.stop()\n" +
@@ -963,10 +968,6 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "        elif action == 'set_volume':\n" +
         "            level = int(obj.get('level', 50))\n" +
         "            _cached_volume = max(0, min(100, level))\n" +
-        "            try:\n" +
-        "                hub.sound.volume(_cached_volume)\n" +
-        "            except AttributeError:\n" +
-        "                pass\n" +
         "\n" +
         "        elif action == 'read':\n" +
         "            metric = obj.get('metric', 'volume')\n" +
@@ -1003,7 +1004,7 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "                name, octave = m.group(1), int(m.group(2))\n" +
         "                base_freq = NOTE_FREQ.get(name, 440)\n" +
         "                freq = int(base_freq * (2 ** (octave - 4)))\n" +
-        "                hub.sound.beep(freq, duration_ms, _cached_volume)\n" +
+        "                hub.sound.beep(freq, duration_ms, _hw_volume())\n" +
         "            else:\n" +
         "                time.sleep_ms(duration_ms)\n" +
         "    except Exception:\n" +
@@ -1200,6 +1201,10 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "\n" +
         "def start():\n" +
         "    \"\"\"Entry point — called when running on the SPIKE Prime hub.\"\"\"\n" +
+        "    try:\n" +
+        "        hub.sound.volume(100)\n" +
+        "    except Exception:\n" +
+        "        pass\n" +
         "    tunnel.callback(on_message)\n" +
         "    _send(_build_capability())\n" +
         "    _run_loop()\n" +
