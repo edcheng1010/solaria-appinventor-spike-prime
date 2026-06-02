@@ -181,6 +181,7 @@
       <include name="HubFace.java"/>
       <include name="DurationUnit.java"/>
       <include name="StopAction.java"/>
+      <include name="MusicNote.java"/>
     </javac>
 
     <echo>precompile-enums step 2: building AnnotationProcessors dir</echo>

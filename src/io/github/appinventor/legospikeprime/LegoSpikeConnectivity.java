@@ -953,6 +953,8 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "            dur = obj.get('duration')\n" +
         "            if dur is not None:\n" +
         "                hub.sound.beep(freq, int(dur), _hw_volume())\n" +
+        "                if obj.get('wait', False):\n" +
+        "                    time.sleep_ms(int(dur))\n" +
         "            else:\n" +
         "                # Indefinite beep — no native API; just beep for a long time\n" +
         "                hub.sound.beep(freq, 30000, _hw_volume())\n" +

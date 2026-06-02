@@ -917,6 +917,10 @@ def _handle_sound(cmd, obj, req_id):
             dur = obj.get('duration')
             if dur is not None:
                 hub.sound.beep(freq, int(dur), _hw_volume())
+                # wait=true means music context (PlayNoteForBeats) — block until done
+                # so notes play sequentially. Sound context (Beep) leaves wait=false.
+                if obj.get('wait', False):
+                    time.sleep_ms(int(dur))
             else:
                 # Indefinite beep — no native API; just beep for a long time
                 hub.sound.beep(freq, 30000, _hw_volume())

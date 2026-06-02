@@ -1,6 +1,7 @@
 package io.github.appinventor.legospikeprime;
 
 import com.google.appinventor.components.annotations.DesignerComponent;
+import com.google.appinventor.components.annotations.Options;
 import com.google.appinventor.components.annotations.DesignerProperty;
 import com.google.appinventor.components.annotations.PropertyCategory;
 import com.google.appinventor.components.annotations.SimpleFunction;
@@ -76,16 +77,20 @@ public class LegoSpikeMusic extends AndroidNonvisibleComponent {
     // =========================================================================
     @SimpleFunction(description =
         "Play a note for the given number of beats. "
-        + "midiNote: MIDI note number (60 = middle C, 69 = A4=440 Hz, range 21-108). "
-        + "beats: duration in beats (e.g. 1.0 = one beat, 0.5 = half beat).")
-    public void PlayNoteForBeats(int midiNote, double beats) {
+        + "note: select from the MusicNote dropdown (C3–C6). "
+        + "beats: duration in beats (e.g. 1.0 = one beat, 0.5 = half beat). "
+        + "For sharps/flats not in the dropdown, use NoteConstant or a raw MIDI number with a Math block. "
+        + "Blocking — the hub waits for the note to finish before playing the next one.")
+    public void PlayNoteForBeats(@Options(MusicNote.class) String note, double beats) {
         if (!checkConnected()) return;
+        MusicNote n = MusicNote.fromUnderlyingValue(note);
+        int midiNote = n != null ? n.getMidi() : 60;
         // Convert MIDI note to frequency: f = 440 * 2^((note-69)/12)
         int freq = (int) Math.round(440.0 * Math.pow(2.0, (midiNote - 69) / 12.0));
         freq = Math.max(20, Math.min(20000, freq));
         int ms = (int) Math.round(beats * 60000.0 / tempo);
         connectivity.sendSSP(new SSPMessage("sound.beep")
-            .withParam("freq", freq).withParam("duration", ms));
+            .withParam("freq", freq).withParam("duration", ms).withParam("wait", true));
     }
 
     @SimpleFunction(description =
