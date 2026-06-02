@@ -414,7 +414,8 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "    # IMU-specific types routed directly\n" +
         "    if port_id == 'imu' or sensor_type in ('pitch', 'roll', 'yaw',\n" +
         "                                             'face_orientation', 'angular_velocity',\n" +
-        "                                             'acceleration', 'gesture', 'is_tilted'):\n" +
+        "                                             'acceleration', 'gesture', 'is_tilted',\n" +
+        "                                             'is_orientation', 'is_shaking'):\n" +
         "        try:\n" +
         "            if sensor_type == 'pitch':          return _tilt_angles()[0]\n" +
         "            if sensor_type == 'roll':           return _tilt_angles()[1]\n" +
@@ -435,6 +436,16 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "                            'z': round(acc[2] / 100.0, 2)}\n" +
         "                except Exception:\n" +
         "                    return {'x': 0, 'y': 0, 'z': 0}\n" +
+        "            if sensor_type == 'is_orientation':\n" +
+        "                p2 = params or {}\n" +
+        "                queried = p2.get('face', '').lower()\n" +
+        "                cur = _face_orientation().lower()\n" +
+        "                return {'match': cur == queried, 'face': p2.get('face', '')}\n" +
+        "            if sensor_type == 'is_shaking':\n" +
+        "                try:\n" +
+        "                    return _GESTURE_MAP.get(hub.motion_sensor.gesture()) == 'shake'\n" +
+        "                except Exception:\n" +
+        "                    return False\n" +
         "            if sensor_type == 'is_tilted':\n" +
         "                p2 = params or {}\n" +
         "                direction = p2.get('direction', 'any').lower()\n" +
@@ -1107,7 +1118,12 @@ public class LegoSpikeConnectivity extends AndroidNonvisibleComponent {
         "\n" +
         "    elif action == 'read':\n" +
         "        metric = obj.get('metric', '')\n" +
-        "        if metric.startswith('button.'):\n" +
+        "        if metric == 'is_button_pressed':\n" +
+        "            btn = obj.get('button', 'left')\n" +
+        "            state = _read_button(btn)\n" +
+        "            _send({'event': 'system', 'metric': 'is_button_pressed',\n" +
+        "                   'value': {'button': btn, 'pressed': state == 'pressed'}})\n" +
+        "        elif metric.startswith('button.'):\n" +
         "            btn_name = metric.split('.')[1]\n" +
         "            try:\n" +
         "                state = _read_button(btn_name)\n" +

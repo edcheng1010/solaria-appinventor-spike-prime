@@ -193,6 +193,36 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
     }
 
     @SimpleFunction(description =
+        "Ask whether the given hub face is currently pointing up. "
+        + "Fires OrientationChecked when the hub responds.")
+    public void IsHubOrientation(@Options(HubFace.class) String face) {
+        HubFace f = HubFace.fromUnderlyingValue(face);
+        String name = f != null ? f.toUnderlyingValue() : face;
+        sendSensorSSP(new SSPMessage("sensor.read")
+            .withPort("imu").withParam("type", "is_orientation").withParam("face", name));
+    }
+
+    @SimpleFunction(description =
+        "Ask whether the hub is currently being shaken. "
+        + "Fires ShakingChecked when the hub responds.")
+    public void IsShaking() {
+        sendSensorSSP(new SSPMessage("sensor.read")
+            .withPort("imu").withParam("type", "is_shaking"));
+    }
+
+    @SimpleFunction(description =
+        "Ask whether a hub button is currently pressed. "
+        + "Fires HubButtonChecked when the hub responds. "
+        + "Note: physically pressing the Center button stops the hub program.")
+    public void IsHubButtonPressed(@Options(HubButton.class) String button) {
+        if (!checkConnected()) return;
+        HubButton b = HubButton.fromUnderlyingValue(button);
+        String name = b != null ? b.toUnderlyingValue() : button.toLowerCase();
+        connectivity.sendSSP(new SSPMessage("system.read")
+            .withParam("metric", "is_button_pressed").withParam("button", name));
+    }
+
+    @SimpleFunction(description =
         "Ask whether the hub is tilted in the given direction from flat. "
         + "Fires TiltChecked when the hub responds. "
         + "Directions: Forward (USB tilted down), Backward (mic down), "
@@ -285,6 +315,24 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
     }
 
     @SimpleEvent(description =
+        "Fired when IsHubOrientation responds. isMatch: true if that face is up.")
+    public void OrientationChecked(String face, boolean isMatch) {
+        EventDispatcher.dispatchEvent(this, "OrientationChecked", face, isMatch);
+    }
+
+    @SimpleEvent(description =
+        "Fired when IsShaking responds. isShaking: true if the hub is being shaken.")
+    public void ShakingChecked(boolean isShaking) {
+        EventDispatcher.dispatchEvent(this, "ShakingChecked", isShaking);
+    }
+
+    @SimpleEvent(description =
+        "Fired when IsHubButtonPressed responds. isPressed: true if that button is pressed.")
+    public void HubButtonChecked(String button, boolean isPressed) {
+        EventDispatcher.dispatchEvent(this, "HubButtonChecked", button, isPressed);
+    }
+
+    @SimpleEvent(description =
         "Fired when IsColor responds. isMatch: true if color matches.")
     public void ColorChecked(String port, String color, boolean isMatch) {
         EventDispatcher.dispatchEvent(this, "ColorChecked", port, color, isMatch);
@@ -332,9 +380,18 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
             JSONObject obj = new JSONObject(data);
             String event = obj.optString("event");
 
-            // Button events come as system events
+            // System events: button subscriptions + is_button_pressed one-shot reads
             if ("system".equals(event)) {
                 final String metric = obj.optString("metric");
+                if ("is_button_pressed".equals(metric)) {
+                    try {
+                        org.json.JSONObject d = (org.json.JSONObject) obj.opt("value");
+                        final boolean pressed = d.optBoolean("pressed", false);
+                        final String btn = d.optString("button", "");
+                        mainHandler.post(() -> HubButtonChecked(btn, pressed));
+                    } catch (Exception ignored) {}
+                    return;
+                }
                 if (metric.startsWith("button.")) {
                     final String btnName = metric.substring("button.".length());
                     if ("center".equals(btnName)) return; // center button kills hub program
@@ -398,6 +455,21 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
                         final String dir = d.optString("direction", "any");
                         mainHandler.post(() -> TiltChecked(dir, tilted));
                     } catch (Exception ignored) {}
+                    break;
+                }
+                case "is_orientation": {
+                    try {
+                        org.json.JSONObject d = (org.json.JSONObject) val;
+                        final boolean match = d.optBoolean("match", false);
+                        final String face = d.optString("face", "");
+                        mainHandler.post(() -> OrientationChecked(face, match));
+                    } catch (Exception ignored) {}
+                    break;
+                }
+                case "is_shaking": {
+                    final boolean shaking = val instanceof Boolean ? (Boolean) val
+                        : "true".equalsIgnoreCase(val != null ? val.toString() : "");
+                    mainHandler.post(() -> ShakingChecked(shaking));
                     break;
                 }
                 case "is_color": {

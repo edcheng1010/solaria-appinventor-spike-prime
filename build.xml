@@ -183,6 +183,7 @@
       <include name="StopAction.java"/>
       <include name="MusicNote.java"/>
       <include name="TiltDirection.java"/>
+      <include name="HubButton.java"/>
     </javac>
 
     <echo>precompile-enums step 2: building AnnotationProcessors dir</echo>

@@ -389,6 +389,16 @@ def _read_sensor_value(port_id, sensor_type, params=None):
                             'z': round(acc[2] / 100.0, 2)}
                 except Exception:
                     return {'x': 0, 'y': 0, 'z': 0}
+            if sensor_type == 'is_orientation':
+                p2 = params or {}
+                queried = p2.get('face', '').lower()
+                cur = _face_orientation().lower()
+                return {'match': cur == queried, 'face': p2.get('face', '')}
+            if sensor_type == 'is_shaking':
+                try:
+                    return _GESTURE_MAP.get(hub.motion_sensor.gesture()) == 'shake'
+                except Exception:
+                    return False
             if sensor_type == 'is_tilted':
                 p2 = params or {}
                 direction = p2.get('direction', 'any').lower()
@@ -1076,7 +1086,12 @@ def _handle_system(cmd, obj, req_id):
 
     elif action == 'read':
         metric = obj.get('metric', '')
-        if metric.startswith('button.'):
+        if metric == 'is_button_pressed':
+            btn = obj.get('button', 'left')
+            state = _read_button(btn)
+            _send({'event': 'system', 'metric': 'is_button_pressed',
+                   'value': {'button': btn, 'pressed': state == 'pressed'}})
+        elif metric.startswith('button.'):
             btn_name = metric.split('.')[1]
             try:
                 state = _read_button(btn_name)
