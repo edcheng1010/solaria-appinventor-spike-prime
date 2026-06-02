@@ -58,7 +58,7 @@ See the extension in action:
 - **Demo video** — watch a SPIKE Prime hub being controlled live from App Inventor
 - **Sample project (.aia)** — import directly into App Inventor to get started immediately
 
-Both are available on the [v0.1.0 release page](https://github.com/edcheng1010/appinventor-lego-spike-prime-extension/releases/tag/v0.1.0).
+Both are available on the [v0.1.0 release page](https://github.com/edcheng1010/solaria-appinventor-spike-prime/releases/tag/v0.1.0).
 
 ---
 

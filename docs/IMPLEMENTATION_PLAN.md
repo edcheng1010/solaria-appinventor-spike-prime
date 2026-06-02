@@ -493,9 +493,9 @@ Tasks:
 
 ### 4.3 Repo and block naming
 
-**Repo rename:**
+**Repo rename:** ✅ **DONE** (pulled forward ahead of Phase 4)
 - This repo: `appinventor-lego-spike-prime-extension` → **`solaria-appinventor-spike-prime`**
-- GitHub redirects old URLs after rename — README link in `solaria-hub` and the v0.1.0 release URL should still work, but solaria-hub README/ROADMAP should be updated to reference the new name
+- GitHub redirects old URLs after rename; cross-references in this repo's README and in solaria-hub README/ROADMAP/ARCHITECTURE/FUNDING have been updated to the new name
 - The .aix filename changes accordingly: `io.github.appinventor.legospikeprime.aix` → `SolariaSpikePrime.aix`
 
 **Block rename: `LegoSpike*` → `SolariaSpikePrime*`** (settled — defer until this phase, not urgent):
