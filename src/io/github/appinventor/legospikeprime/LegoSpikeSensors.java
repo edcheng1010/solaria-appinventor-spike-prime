@@ -194,7 +194,7 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
 
     @SimpleFunction(description =
         "Ask whether the given hub face is currently pointing up. "
-        + "Fires OrientationChecked when the hub responds.")
+        + "Fires HubOrientationChecked when the hub responds.")
     public void IsHubOrientation(@Options(HubFace.class) String face) {
         HubFace f = HubFace.fromUnderlyingValue(face);
         String name = f != null ? f.toUnderlyingValue() : face;
@@ -204,7 +204,7 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
 
     @SimpleFunction(description =
         "Ask whether the hub is currently being shaken. "
-        + "Fires ShakingChecked when the hub responds.")
+        + "Fires HubShakingChecked when the hub responds.")
     public void IsShaking() {
         sendSensorSSP(new SSPMessage("sensor.read")
             .withPort("imu").withParam("type", "is_shaking"));
@@ -316,14 +316,14 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
 
     @SimpleEvent(description =
         "Fired when IsHubOrientation responds. isMatch: true if that face is up.")
-    public void OrientationChecked(String face, boolean isMatch) {
-        EventDispatcher.dispatchEvent(this, "OrientationChecked", face, isMatch);
+    public void HubOrientationChecked(String face, boolean isMatch) {
+        EventDispatcher.dispatchEvent(this, "HubOrientationChecked", face, isMatch);
     }
 
     @SimpleEvent(description =
         "Fired when IsShaking responds. isShaking: true if the hub is being shaken.")
-    public void ShakingChecked(boolean isShaking) {
-        EventDispatcher.dispatchEvent(this, "ShakingChecked", isShaking);
+    public void HubShakingChecked(boolean isShaking) {
+        EventDispatcher.dispatchEvent(this, "HubShakingChecked", isShaking);
     }
 
     @SimpleEvent(description =
@@ -462,14 +462,14 @@ public class LegoSpikeSensors extends AndroidNonvisibleComponent
                         org.json.JSONObject d = (org.json.JSONObject) val;
                         final boolean match = d.optBoolean("match", false);
                         final String face = d.optString("face", "");
-                        mainHandler.post(() -> OrientationChecked(face, match));
+                        mainHandler.post(() -> HubOrientationChecked(face, match));
                     } catch (Exception ignored) {}
                     break;
                 }
                 case "is_shaking": {
                     final boolean shaking = val instanceof Boolean ? (Boolean) val
                         : "true".equalsIgnoreCase(val != null ? val.toString() : "");
-                    mainHandler.post(() -> ShakingChecked(shaking));
+                    mainHandler.post(() -> HubShakingChecked(shaking));
                     break;
                 }
                 case "is_color": {
