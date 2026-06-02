@@ -2,9 +2,9 @@
 
 > **Unofficial integration.** Independent open-source project, not affiliated with the LEGO Group or the Massachusetts Institute of Technology. See [NOTICE](../NOTICE) for trademark and licensing details.
 
-**Last revised:** 2026-05-26
+**Last revised:** 2026-06-03
 **Targeting:** SSP v0.8
-**Status:** Phase 1 and Phase 2 complete · Phase 3 next
+**Status:** Phase 1, Phase 2, and Phase 3 complete · Phase 4 next
 **Author:** Edward Cheng
 
 ---
@@ -437,11 +437,23 @@ Bumping the bridge from v0.6 to v0.8 is part of Phase 3:
 
 ---
 
-## Phase 4 — Client/bridge architectural split (PR 2)
+## Phase 4 — Client/bridge architectural split + multi-frontend (PR 2)
 
-**Goal:** the Java extension stops being SPIKE-Prime-specific. Future Boost / EV3 / Arduino bridges work without changing the App Inventor side.
+**Goal (two-fold):**
+1. **Vertical split** — extract the SSP client/transport logic out of the App Inventor Java code so the
+   extension becomes a thin wrapper over a reusable, language-agnostic bridge.
+2. **Horizontal reach** — that same bridge contract then powers **non-Android frontends**: a browser-based
+   **Scratch** extension first (widest classroom reach, zero-install via Web Bluetooth), then a **Python**
+   library, then a **Web/JS** API. The hub-side `hub_controller.py` (SSP v0.8) is already frontend-agnostic
+   and stays the single source of truth for the hub side.
 
-**Effort:** ~1–2 weeks. Most work is repo extraction and CI for the new bridge release artifact.
+**Approach (Option A — spec-first):** formalise an *SSP client contract* (what any bridge must do:
+discovery, COBS framing, program upload, heartbeat, capability handshake), then provide one reference
+implementation per platform rather than one runtime ported everywhere. Block/command naming stays
+consistent with the LEGO SPIKE naming established in Phase 3 across all frontends.
+
+**Effort:** 4a (bridge extraction + Scratch) ~2–3 weeks; 4b (Python) ~1 week; 4c (Web/JS) mostly falls
+out of 4b's TypeScript core.
 
 **Acceptance criteria:**
 - `TransportProfile` interface exists; `SpikeTransportProfile` implements it
@@ -456,7 +468,7 @@ Bumping the bridge from v0.6 to v0.8 is part of Phase 3:
   - `connect(BluetoothDevice device)`, `disconnect()`
   - `send(byte[] payload)`, `setOnReceive(Consumer<byte[]> handler)`
   - `discoveryFilter()` — what to look for in BLE scans / device discovery
-  - `profileMetadata()` — returns the v0.6 §2.1 profile JSON
+  - `profileMetadata()` — returns the v0.8 §2.1 profile JSON
 - **4.1.2** `SpikeTransportProfile` implementation — extract FD02 UUIDs, COBS+XOR framing, TunnelMessage 0x32 wrapping from `BluetoothInterfaceImpl` into one class
 - **4.1.3** `SSPClient` takes a `TransportProfile`; everything above it becomes hardware-agnostic
 - **4.1.4** Add `TransportProfileRegistry` (static) so future profiles register themselves
@@ -505,7 +517,47 @@ Phase 4 explicitly aligns this repo with the [solaria-hub v2.0 architecture](htt
 - App Inventor dynamic dropdowns from live capability data may need designer-side work (`@Options` enums are compile-time; dropdowns populated from runtime capability data requires `@DesignerProperty` arrays with editor-time defaults plus runtime override)
 - Repo split is a major version bump; existing `.aix` keeps working but new releases need version-matched bridge program
 - Network dependency on first connection — graceful fallback to baked-in default handles offline case; need to test airplane-mode behaviour
-- Bridge version skew — client speaks v0.6, bridge speaks v0.5 (or vice versa): client must read `ssp_version` in capability and degrade gracefully
+- Bridge version skew — client speaks one SSP version, bridge speaks another: every client (Android,
+  Scratch, Python, Web) must read `ssp_version` in the capability handshake and degrade gracefully
+
+### 4.6 Multi-frontend rollout (Scratch → Python → Web)
+
+The SSP client contract (4.1) lets the same hub + protocol serve frontends beyond App Inventor.
+Priority order chosen for classroom reach and validation value: **Scratch first** (largest install base,
+zero-install via Web Bluetooth in Chrome), then **Python**, then **Web/JS** (mostly free once the JS core exists).
+
+**Prerequisite — 4.6.0 Client contract spec.** Add `spec/SSP-CLIENT-v0.8.md` to solaria-hub defining what
+any bridge MUST implement, independent of language: BLE discovery filter (FD02 service), COBS+XOR framing,
+TunnelMessage 0x32 wrapping, program upload (ClearSlot → StartFileUpload → TransferChunk → ProgramFlow),
+capability handshake (`ssp_version` negotiation), heartbeat (`system.ping` ≤5s), and the JSON command/event
+envelope. The Android implementation from 4.1–4.2 is the reference.
+
+**4.6a — Scratch extension** (`solaria-scratch-spike-prime`)
+- **4.6a.1** `solaria-bridge-js` — TypeScript client implementing the 4.6.0 contract over the Web Bluetooth
+  API (browser-native; no Scratch Link needed for BLE on Chrome/Edge). Lives in `solaria-lib-spike-prime/web/`.
+- **4.6a.2** Scratch 3.0 extension wrapping `solaria-bridge-js`; block set mirrors our 8 App Inventor
+  components 1:1 where Scratch's block grammar allows (same LEGO-aligned names). Reporter blocks for
+  sensor reads, hat/`when` blocks map to our subscription events.
+- **4.6a.3** Host as an unofficial Scratch extension (loadable via URL / TurboWarp) — document the
+  Web Bluetooth browser requirement (Chrome/Edge; not Safari/Firefox).
+- **4.6a.4** Parity test: run the Phase 3 hardware checklist (motors, light, sensors, sound, music) through
+  the Scratch blocks against a real hub.
+
+**4.6b — Python library** (`pip install solaria-spike`)
+- **4.6b.1** `solaria-lib-spike-prime/python/` — client implementing the 4.6.0 contract over `bleak`
+  (cross-platform Python BLE). Async API mirroring the SSP command set.
+- **4.6b.2** Thin sync wrapper + examples for classroom/Raspberry-Pi use.
+- **4.6b.3** Publish to PyPI; parity test against the Phase 3 checklist.
+
+**4.6c — Web/JS API** (bonus)
+- **4.6c.1** Promote `solaria-bridge-js` (from 4.6a.1) to a standalone documented npm package
+  (`@solaria/spike-prime`) usable directly in web apps, not just Scratch.
+- **4.6c.2** Minimal demo page (connect, drive a motor, read a sensor) as living documentation.
+
+**Cross-frontend invariants:**
+- One hub program (`hub_controller.py`, SSP v0.8) serves all frontends unchanged.
+- Block/command names stay consistent across frontends (the Phase 3 LEGO-aligned naming is canonical).
+- Each frontend negotiates `ssp_version` and fails gracefully on mismatch.
 
 ---
 
