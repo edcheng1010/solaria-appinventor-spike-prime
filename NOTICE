@@ -1,13 +1,24 @@
-LEGO SPIKE Prime — App Inventor BLE Extension
+LEGO SPIKE Prime — Solaria App Inventor Extension
 Copyright 2026 Edward Cheng
 
-Licensed under the Apache License, Version 2.0.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+---
 
 Trademark Notices:
 
-LEGO® and SPIKE™ Prime are trademarks of the LEGO Group.
-App Inventor is a trademark of the Massachusetts Institute of Technology.
+"LEGO®" and "SPIKE™" are trademarks of the LEGO Group.
+"App Inventor" is a trademark of the Massachusetts Institute of Technology.
+"Scratch™" is a trademark of the MIT Media Lab.
+"TurboWarp" and "PenguinMod" are community projects and are not trademarks
+  of the Scratch Foundation or MIT.
+"Bluetooth®" is a registered trademark of Bluetooth SIG, Inc.
+"Android™" is a trademark of Google LLC.
 
-This project is not affiliated with, endorsed by, or sponsored by
-the LEGO Group or the Massachusetts Institute of Technology.
-Hardware platform names are used solely to describe compatibility.
+This project is not affiliated with, endorsed by, or sponsored by any of
+the above organisations. Hardware platform names and programming environment
+names are used solely to describe compatibility and interoperability.
