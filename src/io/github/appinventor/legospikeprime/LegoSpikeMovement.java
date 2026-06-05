@@ -22,7 +22,7 @@ import com.google.appinventor.components.runtime.ComponentContainer;
  * One LegoSpikeMovement instance controls one drivebase pair.
  */
 @SimpleObject(external = true)
-@DesignerComponent(version = 5,
+@DesignerComponent(version = 6,
     description = "Controls a two-motor drivebase on a LEGO SPIKE Prime hub. "
         + "Set LeftPort, RightPort, and Direction, then call SetMovementMotors and StartMoving. "
         + "Set the Connectivity property to a LegoSpikeConnectivity component.",
@@ -269,6 +269,22 @@ public class LegoSpikeMovement extends AndroidNonvisibleComponent {
         connectivity.sendSSP(new SSPMessage("movement.drive")
             .withParam("left", leftPort).withParam("right", rightPort)
             .withParam("speed", effectiveSpeed).withParam("steering", 0)
+            .withParam("duration", degrees).withParam("duration_unit", "degrees"));
+    }
+
+    @SimpleFunction(description =
+        "Move the drivebase a specific distance (cm) with steering (−100 to +100). "
+        + "Converts cm to degrees using SetMovementRotationDistance (default 17.6 cm/rotation). "
+        + "steering: −100 = full left, 0 = straight, +100 = full right. "
+        + "Matches Scratch's moveForCm block which includes a steering parameter.")
+    public void MoveWithSteeringForDistance(int steering, double cm) {
+        if (!checkConnected()) return;
+        int effectiveSpeed = direction.equalsIgnoreCase("backward") ? -movementSpeed : movementSpeed;
+        int clampedSteering = Math.max(-100, Math.min(100, steering));
+        int degrees = (int) Math.round((cm / cmPerRotation) * 360.0);
+        connectivity.sendSSP(new SSPMessage("movement.drive")
+            .withParam("left", leftPort).withParam("right", rightPort)
+            .withParam("speed", effectiveSpeed).withParam("steering", clampedSteering)
             .withParam("duration", degrees).withParam("duration_unit", "degrees"));
     }
 
