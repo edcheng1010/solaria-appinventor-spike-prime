@@ -4,7 +4,9 @@
 
 # LEGO SPIKE Prime — App Inventor BLE Extension
 
-A multi-component App Inventor extension that enables real-time Bluetooth Low Energy communication with LEGO SPIKE Prime hubs. Control motors, read sensors, and drive the LED matrix — all from App Inventor blocks on your phone or tablet.
+A multi-component MIT App Inventor extension that enables real-time Bluetooth Low Energy communication with LEGO® SPIKE™ Prime hubs. Control motors, read sensors, drive the LED matrix, and play sounds — all from App Inventor blocks on your phone or tablet.
+
+This extension is the **App Inventor client** in the [Solaria](https://github.com/edcheng1010/solaria-hub) open-source robotics ecosystem. It implements the [Solaria Standard Protocol (SSP)](https://github.com/edcheng1010/solaria-hub/blob/main/spec/SSP-v0.8.md), which means the same robot capabilities — motor control, sensor reading, real-time feedback — are available across every Solaria-supported platform. Student code in App Inventor is App Inventor-specific (stateful, component-based blocks); the capabilities it exposes are consistent with what students using Scratch or other Solaria clients can do on the same hardware.
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
@@ -73,7 +75,7 @@ This is different from older LEGO hubs (Boost, SPIKE Essential) which accept dir
 
 ## Project Status
 
-This extension implements [SSP v0.8](https://github.com/edcheng1010/solaria-hub/blob/main/spec/SSP-v0.8.md) — the Solaria Standard Protocol — for full bidirectional communication with the hub. Phases 1–3 are complete; Phase 4 (client/bridge split) is next. Current state:
+This extension implements [SSP v0.8](https://github.com/edcheng1010/solaria-hub/blob/main/spec/SSP-v0.8.md) — the Solaria Standard Protocol — for full bidirectional communication with the hub. Gen 1 is complete (full feature set, 103 hardware tests passed); Gen 2 work (client/bridge split and multi-hub support) is next. Current state:
 
 - [x] BLE scanning and connection (stable)
 - [x] Ghost device filtering via RSSI staleness
@@ -104,7 +106,7 @@ See [docs/COMPILATION_AND_DEBUGGING.md](docs/COMPILATION_AND_DEBUGGING.md) for d
 
 Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a PR.
 
-If you're interested in building bridges for other hardware platforms, check out the [Solaria project](https://github.com/edcheng1010/solaria-hub).
+If you're interested in building extensions for other client platforms or firmware for other hardware, see the [Solaria ecosystem hub](https://github.com/edcheng1010/solaria-hub) for the full roadmap, architecture, and contribution guide. Solaria supports multiple hardware platforms (SPIKE Prime, ESP32, StackChan, and more) and multiple programming environments (App Inventor, Scratch/TurboWarp, and more) — all sharing the same robot capabilities through SSP.
 
 ---
 **Trademark Notice:** LEGO® and SPIKE™ are trademarks of the LEGO Group. App Inventor is a trademark of MIT. This project is not affiliated with or endorsed by any trademark holder. See [NOTICE](./NOTICE) for details.
