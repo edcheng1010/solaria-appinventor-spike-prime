@@ -66,12 +66,16 @@ Both are available on the [v0.1.0 release page](https://github.com/edcheng1010/s
 
 ## How It Works
 
+This extension turns your smartphone into the robot's brain. The App Inventor app runs on the phone and connects to the SPIKE Prime hub via Bluetooth Low Energy. The hub executes motor commands and reports sensor data — all decision-making, AI processing, and program logic runs on the phone.
+
+This means your robot inherits everything your phone can do: camera-based object detection, speech recognition, GPS positioning, internet access, and LLM integration — capabilities far beyond what the hub's microcontroller provides alone.
+
 SPIKE Prime 3.x uses a two-part communication architecture:
 
 1. **Program Upload** — the extension uploads a lightweight Python controller program to the hub
 2. **TunnelMessage** — real-time commands are sent through a bidirectional tunnel between the app and the running Python program
 
-This is different from older LEGO hubs (Boost, SPIKE Essential) which accept direct BLE commands. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full technical breakdown.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full technical breakdown.
 
 ## Project Status
 
@@ -102,11 +106,17 @@ ant build
 
 See [docs/COMPILATION_AND_DEBUGGING.md](docs/COMPILATION_AND_DEBUGGING.md) for detailed build instructions.
 
+## Part of the Solaria Ecosystem
+
+This extension is one client implementation within the broader [Solaria](https://github.com/edcheng1010/solaria-hub) open-source robotics ecosystem. While the App Inventor blocks and programming patterns are specific to this platform — stateful, component-based, Android-native — the underlying robot capabilities (motor control, sensor reading, real-time feedback, AI integration) are consistent across all Solaria-supported client platforms. A student building on App Inventor and a student building on Scratch are working with the same hardware capabilities, even though their code looks different.
+
+For the full picture — hardware roadmap, architecture, and how to contribute — see [solaria-hub](https://github.com/edcheng1010/solaria-hub).
+
 ## Contributing
 
 Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a PR.
 
-If you're interested in building extensions for other client platforms or firmware for other hardware, see the [Solaria ecosystem hub](https://github.com/edcheng1010/solaria-hub) for the full roadmap, architecture, and contribution guide. Solaria supports multiple hardware platforms (SPIKE Prime, ESP32, StackChan, and more) and multiple programming environments (App Inventor, Scratch/TurboWarp, and more) — all sharing the same robot capabilities through SSP.
+If you're interested in building extensions for other client platforms or firmware for other hardware, see the [Solaria ecosystem hub](https://github.com/edcheng1010/solaria-hub) for the full roadmap, architecture, and contribution guide.
 
 ---
 **Trademark Notice:** LEGO® and SPIKE™ are trademarks of the LEGO Group. App Inventor is a trademark of MIT. This project is not affiliated with or endorsed by any trademark holder. See [NOTICE](./NOTICE) for details.
