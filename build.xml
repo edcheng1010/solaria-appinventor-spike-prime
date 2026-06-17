@@ -64,10 +64,18 @@
       Delete all .java files currently in the AI2 directory before copying.
       This ensures that files deleted from our project are not left behind
       in the AI2 tree (where they would cause build errors on the next run).
+      mkdir first so the very first sync to a fresh package path succeeds
+      (a <fileset> over a non-existent dir is a hard error).
     -->
+    <mkdir dir="${ai2.ext.src.dir}"/>
     <delete>
       <fileset dir="${ai2.ext.src.dir}" includes="*.java"/>
     </delete>
+
+    <!-- Remove stale pre-rename sync dirs (old io.github.appinventor.legospike*
+         packages) so their leftover .java files don't get compiled into the build. -->
+    <delete dir="${ai2.components.dir}/src/io/github/appinventor/legospike" quiet="true"/>
+    <delete dir="${ai2.components.dir}/src/io/github/appinventor/legospikeprime" quiet="true"/>
 
     <!--
       Delete both the cached jar AND the compiled class directory for our extension.
