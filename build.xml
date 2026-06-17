@@ -33,13 +33,13 @@
             value="${ai2.root}/appinventor/components"/>
 
   <!-- Directory in the AI2 source tree where our extension source files live.
-       Both the legospike helper package AND the legospikeprime main class are
-       placed here — matching the existing convention in the AI2 tree. -->
+       All components and protocol helpers share the single
+       solaria.appinventor.spikeprime package and are placed here. -->
   <property name="ai2.ext.src.dir"
-            value="${ai2.components.dir}/src/io/github/appinventor/legospike"/>
+            value="${ai2.components.dir}/src/solaria/appinventor/spikeprime"/>
 
   <!-- Fully-qualified package name (all components share this package) -->
-  <property name="ext.fqcn"  value="io.github.appinventor.legospikeprime"/>
+  <property name="ext.fqcn"  value="solaria.appinventor.spikeprime"/>
 
   <!-- Our project source and output layout -->
   <property name="src.dir"     location="${basedir}/src"/>
@@ -75,15 +75,15 @@
       output directory which get picked up by the jar step even after full rebuild.
     -->
     <delete file="${ai2.components.dir}/build/AndroidRuntime.jar" quiet="true"/>
-    <delete dir="${ai2.components.dir}/build/classes/AndroidRuntime/io/github/appinventor/legospikeprime" quiet="true"/>
-    <delete dir="${ai2.components.dir}/build/externalComponents-class/io.github.appinventor.legospikeprime/io/github/appinventor/legospikeprime" quiet="true"/>
+    <delete dir="${ai2.components.dir}/build/classes/AndroidRuntime/solaria/appinventor/spikeprime" quiet="true"/>
+    <delete dir="${ai2.components.dir}/build/externalComponents-class/solaria.appinventor.spikeprime/solaria/appinventor/spikeprime" quiet="true"/>
 
-    <!-- All classes (helpers + main extension) are now in legospikeprime.
+    <!-- All classes (helpers + main extension) are in solaria.appinventor.spikeprime.
          Both packages were merged to fix the NoClassDefFoundError where
          the AI2 build only included classes matching the extension's declared
-         package (legospikeprime), excluding the legospike helpers. -->
+         package, excluding the separate helper package. -->
     <copy todir="${ai2.ext.src.dir}" overwrite="true">
-      <fileset dir="${src.dir}/io/github/appinventor/legospikeprime"
+      <fileset dir="${src.dir}/solaria/appinventor/spikeprime"
                includes="*.java"/>
     </copy>
 
@@ -92,7 +92,7 @@
           tofile="${ai2.ext.src.dir}/extension.json"
           overwrite="true"/>
 
-    <!-- OptionList enums are now in the extension package (io.github.appinventor.legospikeprime)
+    <!-- OptionList enums are now in the extension package (solaria.appinventor.spikeprime)
          and are synced along with all other extension .java files above.
          They get compiled into AndroidRuntime.jar by the main AndroidRuntime build target
          (which compiles all of ${components.src}), making them available to the annotation
@@ -115,18 +115,18 @@
     </delete>
 
     <!-- hub_controller.py — already embedded as HUB_CONTROLLER_PROGRAM in
-         LegoSpikePrime.java, so it is not a runtime asset.  Sync it into the
+         LegoSpikeConnectivity.java, so it is not a runtime asset.  Sync it into the
          AI2 tree source directory for reference / future asset packaging. -->
     <copy file="${src.dir}/resources/hub_controller.py"
           todir="${ai2.ext.src.dir}"
           overwrite="true"/>
 
     <!-- Extension icon: ExternalComponentGenerator resolves iconName relative to
-         src/{packagePath}/, where packagePath = io/github/appinventor/legospikeprime.
+         src/{packagePath}/, where packagePath = solaria/appinventor/spikeprime.
          The icon must therefore live at that path in the AI2 source tree. -->
-    <mkdir dir="${ai2.components.dir}/src/io/github/appinventor/legospikeprime/aiwebres"/>
-    <copy file="${src.dir}/io/github/appinventor/legospikeprime/aiwebres/legospike.png"
-          todir="${ai2.components.dir}/src/io/github/appinventor/legospikeprime/aiwebres"
+    <mkdir dir="${ai2.components.dir}/src/solaria/appinventor/spikeprime/aiwebres"/>
+    <copy file="${src.dir}/solaria/appinventor/spikeprime/aiwebres/legospike.png"
+          todir="${ai2.components.dir}/src/solaria/appinventor/spikeprime/aiwebres"
           overwrite="true"/>
 
     <echo>Sync complete.</echo>
@@ -170,7 +170,7 @@
       <src path="${ai2.components.dir}/src"/>
       <include name="com/google/appinventor/components/common/OptionList.java"/>
       <!-- Our 8 OptionList enum files -->
-      <src path="${src.dir}/io/github/appinventor/legospikeprime"/>
+      <src path="${src.dir}/solaria/appinventor/spikeprime"/>
       <include name="Port.java"/>
       <include name="MotorDirection.java"/>
       <include name="MovementDirection.java"/>
@@ -196,7 +196,7 @@
     <echo>precompile-enums step 3: injecting enum classes into processor classpath</echo>
     <copy todir="${ai2.annotation-processor.dir}" overwrite="true">
       <fileset dir="${basedir}/build/enum-precompile"
-               includes="io/github/appinventor/legospikeprime/*.class"/>
+               includes="solaria/appinventor/spikeprime/*.class"/>
     </copy>
 
   </target>
@@ -275,7 +275,7 @@
            includeantruntime="false"
            source="8" target="8"
            encoding="UTF-8">
-      <src path="${src.dir}/io/github/appinventor/legospikeprime"/>
+      <src path="${src.dir}/solaria/appinventor/spikeprime"/>
       <include name="COBSEncoder.java"/>
       <include name="SpikeCRC32.java"/>
       <include name="MessageFramer.java"/>
@@ -311,16 +311,16 @@
           fork="true"
           failonerror="true">
       <classpath refid="test.cp"/>
-      <arg value="io.github.appinventor.legospikeprime.COBSEncoderTest"/>
-      <arg value="io.github.appinventor.legospikeprime.SpikeCRC32Test"/>
-      <arg value="io.github.appinventor.legospikeprime.MessageFramerTest"/>
-      <arg value="io.github.appinventor.legospikeprime.MessageBuilderTest"/>
-      <arg value="io.github.appinventor.legospikeprime.ResponseParserTest"/>
-      <arg value="io.github.appinventor.legospikeprime.ProgramUploaderTest"/>
-      <arg value="io.github.appinventor.legospikeprime.SSPMessageTest"/>
-      <arg value="io.github.appinventor.legospikeprime.SSPParserTest"/>
-      <arg value="io.github.appinventor.legospikeprime.CapabilityStoreTest"/>
-      <arg value="io.github.appinventor.legospikeprime.ValidatorTest"/>
+      <arg value="solaria.appinventor.spikeprime.COBSEncoderTest"/>
+      <arg value="solaria.appinventor.spikeprime.SpikeCRC32Test"/>
+      <arg value="solaria.appinventor.spikeprime.MessageFramerTest"/>
+      <arg value="solaria.appinventor.spikeprime.MessageBuilderTest"/>
+      <arg value="solaria.appinventor.spikeprime.ResponseParserTest"/>
+      <arg value="solaria.appinventor.spikeprime.ProgramUploaderTest"/>
+      <arg value="solaria.appinventor.spikeprime.SSPMessageTest"/>
+      <arg value="solaria.appinventor.spikeprime.SSPParserTest"/>
+      <arg value="solaria.appinventor.spikeprime.CapabilityStoreTest"/>
+      <arg value="solaria.appinventor.spikeprime.ValidatorTest"/>
     </java>
   </target>
 

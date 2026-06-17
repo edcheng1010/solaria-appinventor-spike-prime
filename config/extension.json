@@ -1,5 +1,5 @@
 {
-  "type": "io.github.appinventor.legospikeprime.LegoSpikeConnectivity",
+  "type": "solaria.appinventor.spikeprime.LegoSpikeConnectivity",
   "name": "LEGO SPIKE Connectivity",
   "version": "10",
   "dateBuilt": "2026-06-03",

@@ -4,6 +4,13 @@
 
 # The Definitive Claude Code Playbook
 
+> **⚠️ Historical document (April 2026).** This describes the original, now-completed
+> bring-up of the protocol layer. Its prompts reference the old
+> `io.github.appinventor.legospike*` packages (since merged and renamed to the single
+> **`solaria.appinventor.spikeprime`** package) and include `git push` steps that no
+> longer reflect the current workflow (commit locally; do not push). Retained for
+> traceability — do not follow its steps verbatim.
+
 **Date:** April 26, 2026
 **Project:** LEGO SPIKE Prime App Inventor Extension
 **Author:** Manus AI

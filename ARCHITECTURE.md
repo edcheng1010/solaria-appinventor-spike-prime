@@ -5,24 +5,30 @@
 ## 1. Project Overview
 This project is an MIT App Inventor extension designed to provide reliable, intuitive Bluetooth Low Energy (BLE) communication with LEGO SPIKE Prime hubs. It is built specifically for educational environments (classrooms, maker spaces) where multiple hubs operate simultaneously and reliability is paramount.
 
-## 2. Current Architectural State (The "Split")
-The codebase currently contains two distinct architectural approaches. **Claude Code must understand this split before making any changes.**
+## 2. Current Architectural State
+All Java sources live in a single package: **`solaria.appinventor.spikeprime`**
+(sources under `src/solaria/appinventor/spikeprime/`, tests under
+`src/test/java/solaria/appinventor/spikeprime/`).
 
-### 2.1 The Active Architecture (MVP)
-This is the working, self-contained implementation that must be used for the MVP.
-- **Location:** `io.github.appinventor.legospikeprime` package
-- **Files:** `LegoSpikePrime.java`, `BluetoothInterfaceImpl.java`
+> **History — the former "Split":** the codebase formerly carried two packages:
+> `io.github.appinventor.legospikeprime` (the active MVP) and
+> `io.github.appinventor.legospike` (helper protocol classes). They were **merged
+> into a single package** to fix a `NoClassDefFoundError` (the AI2 build only
+> included classes matching the extension's declared package, excluding the
+> separate helper package), and the tree was later renamed to the `solaria.*`
+> namespace. Do not reintroduce the split.
+
+### 2.1 The Component / Extension Layer
+- **Files:** the 8 component classes (`LegoSpikeConnectivity`, `LegoSpikeMotors`, `LegoSpikeMovement`, `LegoSpikeLight`, `LegoSpikeSensors`, `LegoSpikeSound`, `LegoSpikeSystem`, `LegoSpikeMusic`) plus `BluetoothInterfaceImpl.java`.
 - **Status:** Fully functional, tested, and stable.
-- **Characteristics:** Uses the App Inventor `BluetoothLE` component for underlying communication. Handles its own device list, RSSI staleness, and basic command sending.
+- **Characteristics:** Uses the App Inventor `BluetoothLE` component for underlying communication. Handles the device list, RSSI staleness, and command dispatch.
 
-### 2.2 The Planned Architecture (Future Extensibility)
-This is a more sophisticated protocol implementation that was developed but **not yet integrated** into the main extension.
-- **Location:** `io.github.appinventor.legospike` package
-- **Files:** 13 helper classes (`SpikeProtocol.java`, `COBSEncoder.java`, `MessageHandler.java`, etc.)
-- **Status:** Code complete but disconnected from the main extension.
-- **Purpose:** Designed to handle the full complexity of the SPIKE Prime protocol (COBS encoding, CRC32, message parsing) and to allow future extensibility to other LEGO hubs.
+### 2.2 The Protocol Layer
+- **Files:** the protocol helper classes (`COBSEncoder.java`, `SpikeCRC32.java`, `MessageFramer.java`, `MessageBuilder.java`, `ResponseParser.java`, `ProgramUploader.java`, `SSPMessage.java`, `SSPParser.java`, etc.).
+- **Status:** Integrated and unit-tested (161 JUnit tests).
+- **Purpose:** Handles the full complexity of the SPIKE Prime / SSP wire format (COBS encoding, CRC32, message parsing) and provides the foundation for future extensibility to other LEGO hubs.
 
-**Rule for Claude Code:** For immediate bug fixes or minor features on the MVP, modify the Active Architecture. For major protocol upgrades, begin the work of integrating the Planned Architecture into the Active Architecture.
+**Rule for Claude Code:** For immediate bug fixes or minor features, modify the component layer. For wire-format changes, modify the protocol layer and update its JUnit tests.
 
 ## 3. Critical Design Decisions and Fixes (DO NOT REVERT)
 
@@ -35,12 +41,12 @@ Over 17 iterations, several critical decisions were made to solve specific hardw
   - Real devices have fluctuating RSSI values.
   - Cached/ghost devices have static RSSI values.
   - The `LegoHub` class tracks `rssiStaleCount`. If the RSSI has not changed for 3 consecutive scans AND the timestamp is old, the device is hidden from the UI.
-  - **Code Location:** `LegoSpikePrime.java` -> `LegoHub.update()` and `CheckAllDevices()`.
+  - **Code Location:** `LegoSpikeConnectivity.java` -> the `LegoHub` inner class (`updateRssi()` and `isVisible()`).
 
 ### 3.2 Null Pointer Protection
 - **Problem:** Asynchronous BLE events often trigger when device addresses or names are null, causing hard crashes.
 - **Current Solution:** Strict null checking before any HashMap access or list iteration.
-- **Code Location:** `LegoSpikePrime.java` -> `HubListChanged` event logic (lines 646-684). It uses a safe nested loop approach rather than relying on HashMaps with potentially null keys.
+- **Code Location:** `LegoSpikeConnectivity.java` -> `HubListChanged` event logic (`dispatchHubListChangedIfNeeded()` and the `HubListChanged` event). It uses a safe nested loop approach rather than relying on HashMaps with potentially null keys.
 
 ### 3.3 UUID Authentication
 - **Problem:** Connecting to the wrong BLE device.
@@ -215,7 +221,7 @@ To support older/legacy LEGO robotics products in the future:
 1. The `BluetoothInterfaceImpl` should be abstracted into an interface (`ILegoBluetooth`).
 2. Create specific implementations (e.g., `SpikePrimeBluetoothImpl`, `Ev3BluetoothImpl`).
 3. The main `LegoSpikePrime` class should act as a facade, routing commands to the appropriate implementation based on the connected device's advertised services.
-4. The Planned Architecture (`io.github.appinventor.legospike`) provides the foundation for this modular approach.
+4. The protocol layer in `solaria.appinventor.spikeprime` provides the foundation for this modular approach.
 
 ## 6. Key Technical References
 

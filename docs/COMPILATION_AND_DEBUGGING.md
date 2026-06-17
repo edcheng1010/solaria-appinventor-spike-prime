@@ -19,10 +19,10 @@ solaria-appinventor-spike-prime/
 ├── config/
 │   └── extension.json
 ├── src/
-│   └── io/github/appinventor/legospikeprime/
-│       ├── LegoSpikePrime.java
+│   └── solaria/appinventor/spikeprime/
+│       ├── LegoSpikeConnectivity.java
 │       ├── BluetoothInterfaceImpl.java
-│       └── ... (other helper classes)
+│       └── ... (other component + protocol helper classes)
 ```
 
 ### Compilation Steps

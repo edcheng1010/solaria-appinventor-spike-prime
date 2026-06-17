@@ -16,7 +16,7 @@ This is an MIT App Inventor extension for LEGO SPIKE Prime hubs, developed by Ed
 2. **NEVER remove the RSSI Staleness Logic.**
    - Device detection relies on RSSI staleness, NOT timeouts or blacklists.
    - If a device's RSSI does not change for 3 consecutive scans, it is considered a "ghost" device (turned off but cached by Android) and must be hidden.
-   - This logic is in `LegoSpikePrime.java` -> `LegoHub.update()`.
+   - This logic is in `LegoSpikeConnectivity.java` -> the `LegoHub` inner class (`updateRssi()` tracks `rssiStaleCount`; `isVisible()` applies the 3-consecutive-scans rule).
 
 3. **ALWAYS check for nulls in asynchronous BLE events.**
    - Android BLE callbacks often fire with null device names or addresses.
@@ -62,19 +62,27 @@ This is an MIT App Inventor extension for LEGO SPIKE Prime hubs, developed by Ed
    - Any method named `BluetoothLE_*` that is not called from a user block or a registered
      listener is dead code and must be removed.
 
-## Codebase Structure (The "Split")
+## Codebase Structure
 
-There are two packages in this repository:
+All Java sources live in a single package: **`solaria.appinventor.spikeprime`**
+(under `src/solaria/appinventor/spikeprime/`, tests under
+`src/test/java/solaria/appinventor/spikeprime/`).
 
-1. **`io.github.appinventor.legospikeprime` (The Active MVP)**
-   - Contains `LegoSpikePrime.java` and `BluetoothInterfaceImpl.java`.
-   - This is the working, self-contained extension. **Modify these files for immediate bug fixes or minor features.**
+> **History:** the repo formerly carried a two-package "Split" —
+> `io.github.appinventor.legospikeprime` (the active MVP: `LegoSpikePrime.java`,
+> `BluetoothInterfaceImpl.java`) and `io.github.appinventor.legospike` (helper
+> protocol classes). The two packages were **merged into the single
+> `solaria.appinventor.spikeprime` package** (this fixed a `NoClassDefFoundError`
+> where the AI2 build only included classes matching the extension's declared
+> package, excluding the separate helper package), and the whole tree was later
+> renamed to the `solaria.*` namespace. Do not reintroduce the split.
 
-2. **`io.github.appinventor.legospike` (The Planned Architecture)**
-   - Contains 13 helper classes (`SpikeProtocol.java`, `COBSEncoder.java`, etc.).
-   - These are currently **NOT INTEGRATED** into the main extension.
-   - They represent a more robust protocol implementation for future extensibility to other LEGO hubs.
-   - COBSEncoder.java constants MUST be verified against the values in Rule 6 above before integration.
+- The 8 component classes (`LegoSpikeConnectivity`, `LegoSpikeMotors`, etc.) and
+  `BluetoothInterfaceImpl.java` are the active extension. **Modify these for
+  immediate bug fixes or minor features.**
+- The protocol helper classes (`COBSEncoder.java`, `SpikeCRC32.java`,
+  `MessageFramer.java`, etc.) implement the SSP/COBS wire format.
+  COBSEncoder.java constants MUST match the values in Rule 6 above.
 
 ## SPIKE Prime 3.x Communication Protocol
 
